@@ -1,0 +1,59 @@
+version: "3.8"
+
+# ============================================================================
+# Edge protection — observe-first CrowdSec
+#
+# Slice 8 deliberately does not add a Traefik bouncer middleware. CrowdSec reads
+# Traefik access logs and exposes operator visibility before enforcement.
+# ============================================================================
+
+networks:
+  platform_net:
+    external: true
+
+volumes:
+  crowdsec_data:
+
+configs:
+  crowdsec_acquis:
+    file: ./acquis.yaml
+
+services:
+  crowdsec:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/crowdsec@sha256:ac3a43114c71956d9d61dcc752160f6e842a4f1a545b560ee88528754b896f91
+    networks:
+      - platform_net
+    environment:
+      COLLECTIONS: crowdsecurity/traefik
+      DISABLE_ONLINE_API: "true"
+      PGID: "0"
+    volumes:
+      - crowdsec_data:/var/lib/crowdsec/data
+      - /var/log/idp/traefik:/var/log/traefik:ro
+    configs:
+      - source: crowdsec_acquis
+        target: /etc/crowdsec/acquis.d/traefik.yaml
+        mode: 0444
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cscli metrics >/dev/null 2>&1
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: any
+        delay: 10s

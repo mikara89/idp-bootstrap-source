@@ -1,0 +1,59 @@
+{
+  "uid": "platform-cluster",
+  "title": "Platform / Cluster (Nodes + Containers)",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Nodes Up",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        { "refId": "A", "expr": "count(up{job=\"node-exporter\"} == 1)" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Containers Running (cAdvisor)",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        { "refId": "A", "expr": "count(container_last_seen{job=\"cadvisor\"})" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Usage % (Nodes)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Used % (Nodes)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk Free % (Nodes, non-tmpfs)",
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\"})"
+        }
+      ]
+    }
+  ]
+}

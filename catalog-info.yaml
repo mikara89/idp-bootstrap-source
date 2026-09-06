@@ -1,0 +1,132 @@
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: platform
+  description: Template catalog domain for a self-hosted Internal Developer Platform.
+  annotations:
+    github.com/project-slug: example/idp-docker-stack
+spec:
+  owner: group:platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: internal-developer-platform
+  description: Docker Swarm based IDP template for ingress, auth, GitOps, and observability.
+  annotations:
+    github.com/project-slug: example/idp-docker-stack
+  tags:
+    - platform
+    - infrastructure
+    - swarm
+  links:
+    - url: https://backstage.idp.example.com
+      title: Backstage
+      icon: dashboard
+    - url: https://proxy.idp.example.com
+      title: Traefik Dashboard
+      icon: dashboard
+    - url: https://monitoring.idp.example.com
+      title: Grafana
+      icon: dashboard
+spec:
+  owner: group:platform-team
+  domain: platform
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: oauth2-forwardauth
+  description: Traefik ForwardAuth contract backed by oauth2-proxy.
+  tags:
+    - auth
+    - oidc
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:platform-team
+  system: internal-developer-platform
+  definition: |
+    openapi: 3.0.0
+    info:
+      title: OAuth2 ForwardAuth
+      version: 1.0.0
+    paths:
+      /oauth2/auth:
+        get:
+          summary: Validate edge session and return identity headers.
+          responses:
+            '202':
+              description: Authenticated request.
+            '401':
+              description: Authentication required.
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: public-net
+  description: External Docker overlay network for Traefik-facing services.
+spec:
+  type: network
+  owner: group:platform-team
+  system: internal-developer-platform
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: platform-net
+  description: External Docker overlay network for internal platform service traffic.
+spec:
+  type: network
+  owner: group:platform-team
+  system: internal-developer-platform
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-portal
+  description: Developer portal for catalog, TechDocs, templates, notifications, and platform discovery.
+  annotations:
+    github.com/project-slug: example/idp-docker-stack
+  links:
+    - url: https://backstage.idp.example.com
+      title: Portal
+      icon: dashboard
+spec:
+  type: website
+  lifecycle: production
+  owner: group:platform-team
+  system: internal-developer-platform
+  dependsOn:
+    - resource:platform-net
+    - resource:public-net
+  consumesApis:
+    - api:oauth2-forwardauth
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: traefik-ingress
+  description: Traefik ingress controller, TLS termination, routing, and dashboard.
+  annotations:
+    github.com/project-slug: example/idp-docker-stack
+  links:
+    - url: https://proxy.idp.example.com
+      title: Dashboard
+      icon: dashboard
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-team
+  system: internal-developer-platform
+  dependsOn:
+    - resource:public-net
+    - resource:platform-net
+  consumesApis:
+    - api:oauth2-forwardauth

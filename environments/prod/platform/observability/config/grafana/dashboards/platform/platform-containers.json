@@ -1,0 +1,185 @@
+{
+  "uid": "platform-containers",
+  "title": "Platform / Containers",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Running Containers",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((time() - container_last_seen{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\"}) < 90)",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Services With Containers",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (container_label_com_docker_swarm_service_name) ((time() - container_last_seen{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\"}) < 90))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Running Containers By Service",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count by (container_label_com_docker_swarm_service_name) ((time() - container_last_seen{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\"}) < 90)",
+          "legendFormat": "{{container_label_com_docker_swarm_service_name}}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Running Container Inventory",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name, image, instance, node, container_label_com_docker_swarm_service_name, container_label_com_docker_swarm_task_name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\",image!=\"\"}[5m])) * 100",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (name, image, instance, node, container_label_com_docker_swarm_service_name, container_label_com_docker_swarm_task_name) (container_memory_usage_bytes{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\",image!=\"\"})",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "max by (name, image, instance, node, container_label_com_docker_swarm_service_name, container_label_com_docker_swarm_task_name) (time() - container_last_seen{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\",image!=\"\"})",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true
+            },
+            "indexByName": {
+              "container_label_com_docker_swarm_service_name": 0,
+              "container_label_com_docker_swarm_task_name": 1,
+              "node": 2,
+              "instance": 3,
+              "name": 4,
+              "image": 5,
+              "Value #A": 6,
+              "Value #B": 7,
+              "Value #C": 8
+            },
+            "renameByName": {
+              "container_label_com_docker_swarm_service_name": "Service",
+              "container_label_com_docker_swarm_task_name": "Task",
+              "instance": "Instance",
+              "name": "Container",
+              "image": "Image",
+              "node": "Node",
+              "Value #A": "CPU %",
+              "Value #B": "Memory",
+              "Value #C": "Last Seen Seconds"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "CPU %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Memory" },
+            "properties": [
+              { "id": "unit", "value": "bytes" },
+              { "id": "decimals", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Last Seen Seconds" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "decimals", "value": 0 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "CPU %"
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Top Containers By CPU",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (container_label_com_docker_swarm_service_name, container_label_com_docker_swarm_task_name, instance) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\"}[5m])) * 100)",
+          "legendFormat": "{{container_label_com_docker_swarm_service_name}} / {{container_label_com_docker_swarm_task_name}} @ {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Top Containers By Memory",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (container_label_com_docker_swarm_service_name, container_label_com_docker_swarm_task_name, instance) (container_memory_usage_bytes{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",name!=\"\"}))",
+          "legendFormat": "{{container_label_com_docker_swarm_service_name}} / {{container_label_com_docker_swarm_task_name}} @ {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

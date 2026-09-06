@@ -1,0 +1,44 @@
+# app-config.yaml — Backstage shared configuration
+#
+# This file contains settings shared by local and production environments.
+# Environment-specific values live in companion files:
+#   - app-config.local.yaml for local development
+#   - app-config.production.yaml for Docker Swarm production overrides
+#
+# Production secrets are injected via Docker Swarm secrets mounted at runtime
+# under /run/secrets/.
+
+app:
+  title: IDP Developer Portal
+
+organization:
+  name: Platform Engineering
+
+backend:
+  listen:
+    port: 7007
+
+  # Cache: in-memory until a shared cache backend is introduced.
+  cache:
+    store: memory
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+
+  rules:
+    - allow: [Component, System, API, Resource, Location, User, Group]
+
+techdocs:
+  builder: external
+  generator:
+    runIn: local
+  publisher:
+    type: local
+
+scaffolder: {}
+
+proxy: {}
+
+kubernetes: {}

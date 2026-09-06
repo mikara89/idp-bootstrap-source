@@ -1,0 +1,9 @@
+{
+  "name": "${{ values.name }}",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=24" }
+}

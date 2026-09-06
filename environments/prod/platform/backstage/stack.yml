@@ -1,0 +1,137 @@
+version: "3.8"
+
+# ============================================================================
+# Backstage — IDP Developer Portal
+#
+# Deployment workflow:
+#   1. The GitLab CI bootstrap image-supply pipeline builds and publishes Backstage.
+#   2. Its CI_JOB_TOKEN job captures the immutable digest and updates this file.
+#   3. Ansible verifies the Registry artifacts before it can start SwarmCD.
+#   4. Ensure Terraform secrets include backstage_db_password and backstage_gitlab_token.
+#   5. After an approved Apply, Backstage connects to platform_database Postgres.
+# ============================================================================
+
+networks:
+  backstage_ingress_net:
+    external: true
+  backstage_db_net:
+    external: true
+
+secrets:
+  backstage_db_password:
+    external: true
+    name: ${BACKSTAGE_DB_PASSWORD_SECRET_NAME}
+  backstage_gitlab_token:
+    external: true
+    name: ${BACKSTAGE_GITLAB_TOKEN_SECRET_NAME}
+
+configs:
+  backstage_app_config:
+    file: ./app-config.yaml
+  backstage_app_config_production:
+    file: ./app-config.production.yaml
+  backstage_catalog_locations:
+    file: ./catalog/locations.yaml
+  backstage_catalog_org:
+    external: true
+    name: ${PLATFORM_CATALOG_ORG_CONFIG_NAME}
+  backstage_catalog_info:
+    external: true
+    name: ${PLATFORM_CATALOG_INFO_CONFIG_NAME}
+  backstage_template:
+    external: true
+    name: ${BACKSTAGE_TEMPLATE_CONFIG_NAME}
+
+services:
+
+  # ==========================================================================
+  # Backstage backend (serves frontend + API)
+  # ==========================================================================
+  backstage:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/backstage@sha256:b38154974673510ab9de7bbff0fd11da54ed794f1ddfe839f3e54f712344001d
+    networks:
+      - backstage_ingress_net
+      - backstage_db_net
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=384
+      DOMAIN: ${DOMAIN}
+      BACKSTAGE_DEPLOY_REVISION: "73a4dda1-reroll-1"
+      APP_CONFIG_app_baseUrl: "https://backstage.${DOMAIN}"
+      APP_CONFIG_backend_baseUrl: "https://backstage.${DOMAIN}"
+      APP_CONFIG_backend_database_client: pg
+      APP_CONFIG_backend_database_connection_host: platform-db
+      APP_CONFIG_backend_database_connection_port: "5432"
+      APP_CONFIG_backend_database_connection_user: backstage
+      APP_CONFIG_backend_database_connection_database: backstage
+    command:
+      - sh
+      - -c
+      - >-
+        export BACKSTAGE_DB_PASSWORD="$$(cat /run/secrets/backstage_db_password)"
+        BACKSTAGE_GITLAB_TOKEN="$$(cat /run/secrets/backstage_gitlab_token)"
+        ROLLBAR_ACCOUNT_TOKEN="disabled"
+        && exec node packages/backend --config /app/app-config.yaml --config /app/app-config.production.yaml
+    secrets:
+      - source: backstage_db_password
+        target: /run/secrets/backstage_db_password
+      - source: backstage_gitlab_token
+        target: /run/secrets/backstage_gitlab_token
+    configs:
+      - source: backstage_app_config
+        target: /app/app-config.yaml
+        mode: 0444
+      - source: backstage_app_config_production
+        target: /app/app-config.production.yaml
+        mode: 0444
+      - source: backstage_catalog_locations
+        target: /app/catalog/locations.yaml
+        mode: 0444
+      - source: backstage_catalog_org
+        target: /app/catalog/users-groups.yaml
+        mode: 0444
+      - source: backstage_catalog_info
+        target: /app/catalog/catalog-info.yaml
+        mode: 0444
+      - source: backstage_template
+        target: /app/examples/template/template.yaml
+        mode: 0444
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          test -s /run/secrets/backstage_db_password
+          && test -s /run/secrets/backstage_gitlab_token
+          && test -f /app/app-config.yaml
+          && test -f /app/app-config.production.yaml
+          && node -e "require('http').get('http://localhost:7007/healthcheck', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 256M
+      update_config:
+        parallelism: 1
+        delay: 15s
+        order: start-first
+      restart_policy:
+        condition: any
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=backstage_ingress_net"
+        - "traefik.http.routers.backstage.rule=Host(`backstage.${DOMAIN}`)"
+        - "traefik.http.routers.backstage.entrypoints=websecure"
+        - "traefik.http.routers.backstage.tls.certresolver=le"
+        - "traefik.http.routers.backstage.middlewares=oauth-errors@swarm,auth@swarm"
+        - "traefik.http.services.backstage.loadbalancer.server.port=7007"

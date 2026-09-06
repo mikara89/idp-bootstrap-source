@@ -1,0 +1,48 @@
+# catalog/users-groups.yaml
+#
+# Bootstrap org entities for the Backstage catalog.
+# These are used by the oauth2Proxy auth resolver to map email -> User entity.
+#
+# Customize the seeded user below so its email exactly matches the value
+# forwarded by OAuth2 Proxy from Keycloak, normally X-Forwarded-Email or
+# X-Auth-Request-Email. Add more users here as the platform team grows, or
+# replace this bootstrap file with directory sync later.
+
+---
+# ============================================================================
+# Groups
+# ============================================================================
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  description: Platform Engineering team — owns and operates the IDP
+  annotations:
+    backstage.io/managed-by-location: file:/app/catalog/users-groups.yaml
+spec:
+  type: team
+  profile:
+    displayName: Platform Engineering
+  children: []
+  members:
+    # Use the local part of each seeded user's email address.
+    - backstage-admin
+
+---
+# ============================================================================
+# Users
+# Format: metadata.name should match the local part of the forwarded email.
+# ============================================================================
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: backstage-admin
+  description: Bootstrap administrator account; customize before first production sign-in
+  annotations:
+    backstage.io/managed-by-location: file:/app/catalog/users-groups.yaml
+spec:
+  profile:
+    displayName: Backstage Administrator
+    email: backstage-admin@example.com
+  memberOf:
+    - platform-team

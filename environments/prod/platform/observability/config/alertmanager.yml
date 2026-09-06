@@ -1,0 +1,71 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "cluster", "env", "team", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "platform-oncall"
+
+  routes:
+    # ----- PAGE: platform -----
+    - matchers:
+        - platform="true"
+        - severity="page"
+      receiver: "platform-oncall"
+      group_wait: 15s
+      repeat_interval: 30m
+
+    # ----- TICKET: platform -----
+    - matchers:
+        - platform="true"
+        - severity="ticket"
+      receiver: "platform-ticket"
+      repeat_interval: 6h
+
+    # ----- PAGE: team (requires team label on alert) -----
+    - matchers:
+        - platform!="true"
+        - severity="page"
+      receiver: "team-default-page"
+      continue: true
+
+    # Example explicit team routing (add one per team or use a webhook router)
+    - matchers:
+        - team="team-a"
+        - severity="page"
+      receiver: "team-team-a-page"
+
+    - matchers:
+        - team="team-a"
+        - severity="ticket"
+      receiver: "team-team-a-ticket"
+
+    # ----- INFO -----
+    - matchers:
+        - severity="info"
+      receiver: "platform-info"
+      repeat_interval: 24h
+
+inhibit_rules:
+  # If a page is firing, suppress lower severities for same alertname+instance/team
+  - source_matchers: [severity="page"]
+    target_matchers: [severity="ticket"]
+    equal: ["alertname", "instance", "team"]
+  - source_matchers: [severity="page"]
+    target_matchers: [severity="info"]
+    equal: ["alertname", "instance", "team"]
+
+receivers:
+  - name: "platform-oncall"
+
+  - name: "platform-ticket"
+
+  - name: "platform-info"
+
+  - name: "team-default-page"
+
+  - name: "team-team-a-page"
+
+  - name: "team-team-a-ticket"

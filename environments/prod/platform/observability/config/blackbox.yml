@@ -1,0 +1,12 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+  http_2xx_or_401:
+    prober: http
+    timeout: 5s
+    http:
+      # Private GitLab Registry correctly challenges unauthenticated clients.
+      valid_status_codes: [200, 401]

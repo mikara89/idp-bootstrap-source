@@ -1,0 +1,77 @@
+version: "3.8"
+
+networks:
+  public_net:
+    external: true
+  platform_net:
+    external: true
+
+secrets:
+  oauth2_proxy_cookie_secret:
+    external: true
+    name: ${OAUTH2_PROXY_COOKIE_SECRET_NAME}
+  oauth2_proxy_client_secret:
+    external: true
+    name: ${OAUTH2_PROXY_CLIENT_SECRET_NAME}
+
+configs:
+  oauth2_proxy_cfg:
+    external: true
+    name: ${OAUTH2_PROXY_CFG_CONFIG_NAME}
+
+services:
+  oauth2-proxy:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/oauth2-proxy@sha256:685d3823eebab3a9eec699f86154ebd11370228e453355a42a06cf16a5550fd1
+    networks:
+      - public_net
+      - platform_net
+
+    secrets:
+      - oauth2_proxy_cookie_secret
+      - oauth2_proxy_client_secret
+
+    configs:
+      - source: oauth2_proxy_cfg
+        target: /etc/oauth2-proxy.cfg
+        mode: 0444
+
+    command:
+      - --config=/etc/oauth2-proxy.cfg
+
+    healthcheck:
+      test: ["CMD", "/bin/oauth2-proxy", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      # Single-platform-node MVP: a second replica on the same VM2 does not
+      # survive node loss and only inflates the memory budget.
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 192M
+        reservations:
+          memory: 64M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=public_net"
+        - "traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`)"
+        - "traefik.http.routers.auth.entrypoints=websecure"
+        - "traefik.http.routers.auth.tls.certresolver=le"
+        - "traefik.http.services.auth.loadbalancer.server.port=4180"
+
+        - "traefik.http.middlewares.auth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth"
+        - "traefik.http.middlewares.auth.forwardauth.trustForwardHeader=true"
+        - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=X-Forwarded-User,X-Forwarded-Email,X-Forwarded-Preferred-Username,X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Preferred-Username,X-Auth-Request-Groups"
+
+        - "traefik.http.middlewares.oauth-errors.errors.status=401-403"
+        - "traefik.http.middlewares.oauth-errors.errors.statusRewrites.401=302"
+        - "traefik.http.middlewares.oauth-errors.errors.statusRewrites.403=302"
+        - "traefik.http.middlewares.oauth-errors.errors.service=auth@swarm"
+        - "traefik.http.middlewares.oauth-errors.errors.query=/oauth2/start?rd={url}"

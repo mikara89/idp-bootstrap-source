@@ -1,0 +1,268 @@
+version: "3.8"
+
+# ============================================================================
+# Sovereign Identity - Keycloak
+#
+# Slice 6 keeps OAuth2 Proxy as the ForwardAuth boundary and introduces
+# Keycloak as the self-hosted OIDC issuer.
+# ============================================================================
+
+networks:
+  public_net:
+    external: true
+  platform_net:
+    external: true
+
+secrets:
+  keycloak_admin_password:
+    external: true
+    name: ${KEYCLOAK_ADMIN_PASSWORD_SECRET_NAME}
+  keycloak_db_password:
+    external: true
+    name: ${KEYCLOAK_DB_PASSWORD_SECRET_NAME}
+  keycloak_bootstrap_user_password:
+    external: true
+    name: ${KEYCLOAK_BOOTSTRAP_USER_PASSWORD_SECRET_NAME}
+  oauth2_proxy_client_secret:
+    external: true
+    name: ${OAUTH2_PROXY_CLIENT_SECRET_NAME}
+  gitlab_oidc_client_secret:
+    external: true
+    name: ${GITLAB_OIDC_CLIENT_SECRET_NAME}
+
+services:
+  keycloak:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:e5fabde243a03c8ed5052fa3d481cf56bc6bbf42a6383c5f2db40f2b33c2de26
+    networks:
+      - public_net
+      - platform_net
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://platform-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: https://${KEYCLOAK_HOSTNAME}
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_PROXY_TRUSTED_ADDRESSES: ${PUBLIC_OVERLAY_CIDR}
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    secrets:
+      - source: keycloak_admin_password
+        target: /run/secrets/keycloak_admin_password
+      - source: keycloak_db_password
+        target: /run/secrets/keycloak_db_password
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        export KC_BOOTSTRAP_ADMIN_PASSWORD="$$(cat /run/secrets/keycloak_admin_password)"
+        KC_DB_PASSWORD="$$(cat /run/secrets/keycloak_db_password)"
+        && exec /opt/keycloak/bin/kc.sh start
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 384M
+      restart_policy:
+        condition: any
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=public_net"
+        - "traefik.http.routers.keycloak.rule=Host(`${KEYCLOAK_HOSTNAME}`)"
+        - "traefik.http.routers.keycloak.entrypoints=websecure"
+        - "traefik.http.routers.keycloak.tls.certresolver=le"
+        - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+
+  keycloak-bootstrap:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:e5fabde243a03c8ed5052fa3d481cf56bc6bbf42a6383c5f2db40f2b33c2de26
+    networks:
+      - platform_net
+    environment:
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_BOOTSTRAP_USER_EMAIL: ${KEYCLOAK_BOOTSTRAP_USER_EMAIL}
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
+      DOMAIN: ${DOMAIN}
+    secrets:
+      - source: keycloak_admin_password
+        target: /run/secrets/keycloak_admin_password
+      - source: keycloak_bootstrap_user_password
+        target: /run/secrets/keycloak_bootstrap_user_password
+      - source: oauth2_proxy_client_secret
+        target: /run/secrets/oauth2_proxy_client_secret
+      - source: gitlab_oidc_client_secret
+        target: /run/secrets/gitlab_oidc_client_secret
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        admin_password="$$(cat /run/secrets/keycloak_admin_password)"
+        bootstrap_password="$$(cat /run/secrets/keycloak_bootstrap_user_password)"
+        oauth2_secret="$$(cat /run/secrets/oauth2_proxy_client_secret)"
+        gitlab_oidc_secret="$$(cat /run/secrets/gitlab_oidc_client_secret)"
+        server="http://keycloak:8080"
+        realm="$${KEYCLOAK_REALM}"
+        client_id="$${OAUTH2_PROXY_CLIENT_ID}"
+        user_email="$${KEYCLOAK_BOOTSTRAP_USER_EMAIL}"
+        username="$${user_email%@*}"
+        redirect_uri="https://auth.$${DOMAIN}/oauth2/callback"
+        gitlab_redirect_uri="https://gitlab.$${DOMAIN}/users/auth/openid_connect/callback"
+
+        find_group_id() {
+          group_name="$$1"
+          /opt/keycloak/bin/kcadm.sh get groups -r "$${realm}" -q search="$${group_name}" --fields id,name --format csv --noquotes \
+            | while IFS=, read -r id name rest; do
+                if [ "$${name}" = "$${group_name}" ]; then
+                  echo "$${id}"
+                  break
+                fi
+              done
+        }
+
+        ensure_groups_mapper() {
+          mapper_client_uuid="$$1"
+          if ! /opt/keycloak/bin/kcadm.sh get "clients/$${mapper_client_uuid}/protocol-mappers/models" -r "$${realm}" | grep -E '"name"[[:space:]]*:[[:space:]]*"groups"' >/dev/null 2>&1; then
+            /opt/keycloak/bin/kcadm.sh create "clients/$${mapper_client_uuid}/protocol-mappers/models" -r "$${realm}" \
+              -s name=groups \
+              -s protocol=openid-connect \
+              -s protocolMapper=oidc-group-membership-mapper \
+              -s 'config."claim.name"=groups' \
+              -s 'config."full.path"=false' \
+              -s 'config."id.token.claim"=true' \
+              -s 'config."access.token.claim"=true' \
+              -s 'config."userinfo.token.claim"=true'
+          fi
+        }
+
+        until /opt/keycloak/bin/kcadm.sh config credentials --server "$${server}" --realm master --user admin --password "$${admin_password}"; do
+          echo "Waiting for Keycloak admin API"
+          sleep 5
+        done
+
+        if ! /opt/keycloak/bin/kcadm.sh get "realms/$${realm}" >/dev/null 2>&1; then
+          /opt/keycloak/bin/kcadm.sh create realms -s realm="$${realm}" -s enabled=true -s displayName="$${realm}"
+        fi
+        /opt/keycloak/bin/kcadm.sh update "realms/$${realm}" \
+          -s registrationAllowed=false \
+          -s bruteForceProtected=true \
+          -s ssoSessionIdleTimeout=28800 \
+          -s ssoSessionMaxLifespan=43200 \
+          -s accessTokenLifespan=300
+
+        gitlab_client_uuid="$$(/opt/keycloak/bin/kcadm.sh get clients -r "$${realm}" -q clientId=gitlab --fields id --format csv --noquotes | head -n1 || true)"
+        if [ -z "$${gitlab_client_uuid}" ]; then
+          /opt/keycloak/bin/kcadm.sh create clients -r "$${realm}" \
+            -s clientId=gitlab \
+            -s enabled=true \
+            -s publicClient=false \
+            -s standardFlowEnabled=true \
+            -s directAccessGrantsEnabled=false \
+            -s serviceAccountsEnabled=false \
+            -s 'attributes."pkce.code.challenge.method"=S256' \
+            -s "secret=$${gitlab_oidc_secret}" \
+            -s "redirectUris=[\"$${gitlab_redirect_uri}\"]" \
+            -s "webOrigins=[\"https://gitlab.$${DOMAIN}\"]"
+        else
+          /opt/keycloak/bin/kcadm.sh update "clients/$${gitlab_client_uuid}" -r "$${realm}" \
+            -s enabled=true \
+            -s publicClient=false \
+            -s standardFlowEnabled=true \
+            -s directAccessGrantsEnabled=false \
+            -s serviceAccountsEnabled=false \
+            -s 'attributes."pkce.code.challenge.method"=S256' \
+            -s "secret=$${gitlab_oidc_secret}" \
+            -s "redirectUris=[\"$${gitlab_redirect_uri}\"]" \
+            -s "webOrigins=[\"https://gitlab.$${DOMAIN}\"]"
+        fi
+
+        client_uuid="$$(/opt/keycloak/bin/kcadm.sh get clients -r "$${realm}" -q clientId="$${client_id}" --fields id --format csv --noquotes | head -n1 || true)"
+        if [ -z "$${client_uuid}" ]; then
+          /opt/keycloak/bin/kcadm.sh create clients -r "$${realm}" \
+            -s clientId="$${client_id}" \
+            -s enabled=true \
+            -s publicClient=false \
+            -s standardFlowEnabled=true \
+            -s directAccessGrantsEnabled=false \
+            -s serviceAccountsEnabled=false \
+            -s 'attributes."pkce.code.challenge.method"=S256' \
+            -s "secret=$${oauth2_secret}" \
+            -s "redirectUris=[\"$${redirect_uri}\"]" \
+            -s "webOrigins=[\"https://auth.$${DOMAIN}\"]"
+          client_uuid="$$(/opt/keycloak/bin/kcadm.sh get clients -r "$${realm}" -q clientId="$${client_id}" --fields id --format csv --noquotes | head -n1)"
+        else
+          /opt/keycloak/bin/kcadm.sh update "clients/$${client_uuid}" -r "$${realm}" \
+            -s enabled=true \
+            -s publicClient=false \
+            -s standardFlowEnabled=true \
+            -s directAccessGrantsEnabled=false \
+            -s serviceAccountsEnabled=false \
+            -s 'attributes."pkce.code.challenge.method"=S256' \
+            -s "secret=$${oauth2_secret}" \
+            -s "redirectUris=[\"$${redirect_uri}\"]" \
+            -s "webOrigins=[\"https://auth.$${DOMAIN}\"]"
+        fi
+
+        ensure_groups_mapper "$${gitlab_client_uuid}"
+        ensure_groups_mapper "$${client_uuid}"
+
+        user_uuid="$$(/opt/keycloak/bin/kcadm.sh get users -r "$${realm}" -q email="$${user_email}" --fields id --format csv --noquotes | head -n1 || true)"
+        bootstrap_user_created=false
+        if [ -z "$${user_uuid}" ]; then
+          /opt/keycloak/bin/kcadm.sh create users -r "$${realm}" \
+            -s username="$${username}" \
+            -s email="$${user_email}" \
+            -s enabled=true \
+            -s emailVerified=true \
+            -s 'requiredActions=["UPDATE_PASSWORD","CONFIGURE_TOTP"]'
+          user_uuid="$$(/opt/keycloak/bin/kcadm.sh get users -r "$${realm}" -q email="$${user_email}" --fields id --format csv --noquotes | head -n1)"
+          bootstrap_user_created=true
+        else
+          /opt/keycloak/bin/kcadm.sh update "users/$${user_uuid}" -r "$${realm}" \
+            -s username="$${username}" \
+            -s email="$${user_email}" \
+            -s enabled=true \
+            -s emailVerified=true
+        fi
+
+        for group_name in platform-users platform-admins; do
+          group_uuid="$$(find_group_id "$${group_name}" || true)"
+          if [ -z "$${group_uuid}" ]; then
+            /opt/keycloak/bin/kcadm.sh create groups -r "$${realm}" -s name="$${group_name}" || true
+            group_uuid="$$(find_group_id "$${group_name}" || true)"
+          fi
+          if [ -z "$${group_uuid}" ]; then
+            echo "Failed to find or create Keycloak group $${group_name}" >&2
+            exit 1
+          fi
+          /opt/keycloak/bin/kcadm.sh update "users/$${user_uuid}/groups/$${group_uuid}" -r "$${realm}" -n
+        done
+
+        if [ "$${bootstrap_user_created}" = true ]; then
+          /opt/keycloak/bin/kcadm.sh set-password -r "$${realm}" --userid "$${user_uuid}" --new-password "$${bootstrap_password}" --temporary=true
+        fi
+        echo "Keycloak realm, clients, groups, and bootstrap user are ready; existing user credentials are preserved."
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 15s
+        max_attempts: 10

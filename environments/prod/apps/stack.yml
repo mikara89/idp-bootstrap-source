@@ -1,0 +1,19 @@
+# GENERATED FILE — DO NOT EDIT DIRECTLY. Source: definitions/; renderer: scripts/render-apps-stack.py
+version: "3.8"
+networks:
+  apps_net:
+    external: true
+  metrics_net:
+    external: true
+  public_net:
+    external: true
+services:
+  apps-placeholder:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/alpine@sha256:43027b43fb785b7c5adc53bd3b5dbc1a258270a2e8aff24f477b45c4e38dac68
+    command: ["sh", "-c", "sleep infinity"]
+    deploy:
+      replicas: 0
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M

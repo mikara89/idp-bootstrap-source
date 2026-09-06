@@ -1,0 +1,146 @@
+version: "3.8"
+
+# ============================================================================
+# Central Platform PostgreSQL
+#
+# The sovereign MVP database service for platform applications. It is internal
+# only on platform_net and uses one Hetzner Volume through a bind-backed Docker
+# volume on the pinned manager.
+# ============================================================================
+
+networks:
+  platform_net:
+    external: true
+  backstage_db_net:
+    external: true
+
+volumes:
+  platform_db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PLATFORM_DB_DATA_PATH}
+
+secrets:
+  platform_db_admin_password:
+    external: true
+    name: ${PLATFORM_DB_ADMIN_PASSWORD_SECRET_NAME}
+  backstage_db_password:
+    external: true
+    name: ${BACKSTAGE_DB_PASSWORD_SECRET_NAME}
+  keycloak_db_password:
+    external: true
+    name: ${KEYCLOAK_DB_PASSWORD_SECRET_NAME}
+
+services:
+  platform-db:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:e34f4120a6b433e93d9678ce21e0f7ea9c0c1540ab37fad77bf1e943e2bbba13
+    networks:
+      platform_net:
+        aliases:
+          - platform-db
+      backstage_db_net:
+        aliases:
+          - platform-db
+    environment:
+      POSTGRES_USER: platform_admin
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_PASSWORD_FILE: /run/secrets/platform_db_admin_password
+    secrets:
+      - source: platform_db_admin_password
+        target: /run/secrets/platform_db_admin_password
+    volumes:
+      - platform_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_admin -d postgres"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+          - node.labels.persistence.platform-db == true
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 384M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
+  platform-db-bootstrap:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:e34f4120a6b433e93d9678ce21e0f7ea9c0c1540ab37fad77bf1e943e2bbba13
+    networks:
+      - platform_net
+    environment:
+      PGHOST: platform-db
+      PGPORT: "5432"
+      PGUSER: platform_admin
+      PGDATABASE: postgres
+    secrets:
+      - source: platform_db_admin_password
+        target: /run/secrets/platform_db_admin_password
+      - source: backstage_db_password
+        target: /run/secrets/backstage_db_password
+      - source: keycloak_db_password
+        target: /run/secrets/keycloak_db_password
+    command:
+      - sh
+      - -ec
+      - |
+        export PGPASSWORD="$$(cat /run/secrets/platform_db_admin_password)"
+        backstage_password="$$(cat /run/secrets/backstage_db_password)"
+        keycloak_password="$$(cat /run/secrets/keycloak_db_password)"
+
+        until pg_isready -h "$${PGHOST}" -p "$${PGPORT}" -U "$${PGUSER}" -d "$${PGDATABASE}"; do
+          echo "Waiting for central platform PostgreSQL"
+          sleep 5
+        done
+
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'backstage'" | tr -d '[:space:]')" != "1" ]; then
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE backstage LOGIN CREATEDB;"
+        fi
+
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'backstage'" | tr -d '[:space:]')" != "1" ]; then
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE backstage OWNER backstage;"
+        fi
+
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'keycloak'" | tr -d '[:space:]')" != "1" ]; then
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE keycloak LOGIN;"
+        fi
+
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'" | tr -d '[:space:]')" != "1" ]; then
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE keycloak OWNER keycloak;"
+        fi
+
+        psql -v ON_ERROR_STOP=1 \
+          -v backstage_password="$${backstage_password}" \
+          -v keycloak_password="$${keycloak_password}" <<'SQL'
+        ALTER ROLE backstage WITH LOGIN CREATEDB PASSWORD :'backstage_password';
+        ALTER ROLE keycloak WITH LOGIN PASSWORD :'keycloak_password';
+        SQL
+
+        psql -v ON_ERROR_STOP=1 -d backstage -c 'ALTER DATABASE backstage OWNER TO backstage;'
+        psql -v ON_ERROR_STOP=1 -d keycloak -c 'ALTER DATABASE keycloak OWNER TO keycloak;'
+        echo "Central platform PostgreSQL roles and databases are ready."
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10

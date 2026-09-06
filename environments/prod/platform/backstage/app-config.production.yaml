@@ -1,0 +1,152 @@
+# app-config.production.yaml — Production overrides
+#
+# This file is checked into Git. Secrets are never inlined here — they
+# are read from Docker Swarm secret files mounted at /run/secrets/.
+#
+# Merged on top of app-config.yaml when Backstage starts with:
+#   node packages/backend --config /app/app-config.yaml \
+#                         --config /app/app-config.production.yaml
+#
+# Base URLs and DB host are passed via SwarmCD environment variables
+# (APP_CONFIG_* env vars override config at runtime — see stack.yml).
+# This file handles the remaining production concerns: auth, catalog,
+# integrations, and TechDocs.
+
+app:
+  # APP_CONFIG_app_baseUrl set via SwarmCD env var in stack.yml
+  baseUrl: https://backstage.${DOMAIN}
+
+backend:
+  # APP_CONFIG_backend_baseUrl set via SwarmCD env var in stack.yml
+  baseUrl: https://backstage.${DOMAIN}
+
+  cors:
+    origin: https://backstage.${DOMAIN}
+
+  database:
+    client: pg
+    connection:
+      host: platform-db
+      port: 5432
+      user: backstage
+      database: backstage
+      # Password is exported by the container command from the Swarm secret.
+      password: ${BACKSTAGE_DB_PASSWORD}
+      ssl: false
+
+  cache:
+    store: memory
+
+# =============================================================================
+# AUTH — sovereign oauth2Proxy header provider
+#
+# Backstage sits behind Traefik + OAuth2 Proxy ForwardAuth. When Keycloak is
+# enabled, OAuth2 Proxy uses Keycloak as the sovereign OIDC issuer and Backstage
+# keeps trusting the forwarded identity headers from the auth boundary.
+# No Backstage redirect/callback flow is configured in production; identity is
+# resolved from HTTP headers and then matched to catalog User entities.
+#
+# Required Traefik authResponseHeaders (already configured in auth/stack.yml):
+#   X-Auth-Request-Email, X-Auth-Request-Preferred-Username,
+#   X-Auth-Request-User
+#
+# The local backend module reads those ForwardAuth response headers. Do not
+# expose this service directly: direct clients can otherwise forge headers.
+# =============================================================================
+auth:
+  environment: production
+  providers:
+    oauth2Proxy:
+      signIn:
+        resolvers:
+          # Match incoming email header to User entities in the catalog
+          - resolver: emailMatchingUserEntityProfileEmail
+          # Fallback: match the local part of the forwarded email to a seeded
+          # User entity name in the catalog.
+          - resolver: emailLocalPartMatchingUserEntityName
+
+# =============================================================================
+# INTEGRATIONS — self-hosted GitLab
+# Group Access Token read from a dedicated Docker Swarm secret for Backstage.
+# =============================================================================
+integrations:
+  gitlab:
+    - host: gitlab.${DOMAIN}
+      baseUrl: https://gitlab.${DOMAIN}
+      apiBaseUrl: https://gitlab.${DOMAIN}/api/v4
+      token: ${BACKSTAGE_GITLAB_TOKEN}
+
+# Optional plugin packaged in the current Backstage image. A dummy token keeps
+# the backend bootable until real Rollbar integration is configured.
+rollbar:
+  organization: disabled
+  accountToken: ${ROLLBAR_ACCOUNT_TOKEN}
+
+# Frontend bundle schema requires these roots because the current image is built
+# with the example app plugin set. Keep them inert until real integrations exist.
+sentry:
+  organization: disabled
+
+costInsights:
+  engineerCost: 0
+  products: {}
+
+# Optional plugin packaged in the current Backstage image. Keep it explicitly
+# empty until a Kubernetes integration is configured.
+kubernetes:
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods: []
+
+# Optional plugin packaged in the current Backstage image. No Kafka clusters are
+# configured yet, but the backend requires the keys to exist at startup.
+kafka:
+  clientId: backstage
+  clusters: []
+
+# Optional plugin packaged in the current Backstage image. No Jenkins instances
+# are configured yet.
+jenkins:
+  instances: []
+
+# =============================================================================
+# CATALOG
+# =============================================================================
+catalog:
+  rules:
+    - allow: [Component, System, API, Resource, Location, User, Group]
+
+  locations:
+    # Bootstrap org data (mounted from catalog/users-groups.yaml via Swarm config)
+    - type: file
+      target: /app/catalog/users-groups.yaml
+      rules:
+        - allow: [User, Group]
+
+    # Catalog locations (mounted from catalog/locations.yaml via Swarm config)
+    - type: file
+      target: /app/catalog/locations.yaml
+      rules:
+        - allow: [Location, Component, System, API, Resource]
+
+  providers:
+    gitlab:
+      platform-services:
+        host: gitlab.${DOMAIN}
+        group: platform/services
+        branch: main
+        skipForkedRepos: true
+        includeArchivedRepos: false
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 3 }
+
+# =============================================================================
+# TECHDOCS (basic local builder — upgrade to S3 post-MVP)
+# =============================================================================
+techdocs:
+  builder: external
+  generator:
+    runIn: local
+  publisher:
+    type: local

@@ -1,0 +1,45 @@
+{
+  "uid": "platform-observability",
+  "title": "Platform / Observability Stack",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Prometheus Targets Up",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        { "refId": "A", "expr": "count(up == 1)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Prometheus Scrape Failures",
+      "gridPos": { "x": 8, "y": 0, "w": 16, "h": 4 },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(scrape_samples_scraped[5m]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Loki Ingest (bytes/sec) (if exposed)",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 6 },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(loki_distributor_bytes_received_total[5m]))" }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Platform Logs (Loki)",
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"docker\"} |= \"error\""
+        }
+      ]
+    }
+  ]
+}

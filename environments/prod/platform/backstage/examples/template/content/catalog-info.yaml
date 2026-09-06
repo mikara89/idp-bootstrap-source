@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name | dump }}
+  description: ${{ values.description | dump }}
+  annotations:
+    gitlab.com/project-slug: platform/services/${{ values.name }}
+  links:
+    - url: ${{ values.gitlabBaseUrl }}/platform/services/${{ values.name }}
+      title: Source repository
+spec:
+  type: service
+  owner: group:default/platform-team
+  system: internal-developer-platform
+  lifecycle: experimental

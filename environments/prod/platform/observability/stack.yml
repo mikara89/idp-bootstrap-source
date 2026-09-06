@@ -1,0 +1,309 @@
+version: "3.8"
+
+networks:
+  platform_net:
+    external: true
+  public_net:
+    external: true
+  metrics_net:
+    external: true
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  loki_data:
+  grafana_data:
+  alloy_data:
+
+configs:
+  prometheus_yml:
+    external: true
+    name: ${PROMETHEUS_YML_CONFIG_NAME}
+  blackbox_yml:
+    file: ./config/blackbox.yml
+  loki_yml:
+    file: ./config/loki.yml
+  alloy_config:
+    file: ./config/alloy.alloy
+  apps_file_sd:
+    file: ./config/file_sd/apps.yml
+  alertmanager_yml:
+    file: ./config/alertmanager.yml
+  grafana_datasources:
+    file: ./config/grafana/datasources.yml
+  grafana_dashboards:
+    file: ./config/grafana/dashboards.yml
+
+  # Prometheus rules (add more files as you grow)
+  rules_platform:
+    external: true
+    name: ${RULES_PLATFORM_CONFIG_NAME}
+  rules_cluster:
+    file: ./config/rules/cluster.rules.yml
+  # Grafana dashboards (add more files as you grow)
+  grafana_platform_cluster:
+    file: ./config/grafana/dashboards/platform/platform-cluster.json
+  grafana_platform_containers:
+    file: ./config/grafana/dashboards/platform/platform-containers.json
+  grafana_platform_ingress:
+    file: ./config/grafana/dashboards/platform/platform-ingress.json
+  grafana_platform_observability:
+    file: ./config/grafana/dashboards/platform/platform-observability.json
+secrets:
+  grafana_admin_password:
+    external: true
+    name: ${GRAFANA_ADMIN_PASSWORD_SECRET_NAME}
+
+services:
+  # =========================
+  # METRICS: Prometheus
+  # =========================
+  prometheus:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/prometheus@sha256:2024d7bdfc559f6254de22d65e62d799eaa8eb818fe5dbeca212d3f200b70890
+    networks: [platform_net, public_net, metrics_net]
+    volumes:
+      - prometheus_data:/prometheus
+    configs:
+      - source: prometheus_yml
+        target: /etc/prometheus/prometheus.yml
+      - source: rules_platform
+        target: /etc/prometheus/rules/platform.rules.yml
+      - source: rules_cluster
+        target: /etc/prometheus/rules/cluster.rules.yml
+      - source: apps_file_sd
+        target: /etc/prometheus/file_sd/apps/apps.yml
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.wal-compression
+      - --web.enable-lifecycle
+    deploy:
+      labels:
+        # ---- Prometheus ----
+        - traefik.enable=true
+        - traefik.swarm.network=public_net
+        - traefik.http.routers.prometheus.rule=Host(`prom.${DOMAIN}`)
+        - traefik.http.routers.prometheus.entrypoints=websecure
+        - traefik.http.routers.prometheus.tls=true
+        - traefik.http.routers.prometheus.tls.certresolver=le
+        - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+        # Protect dashboard with ForwardAuth (middleware defined in oauth2-proxy stack)
+        - traefik.http.routers.prometheus.middlewares=oauth-errors@swarm,auth@swarm
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 384M
+
+  # =========================
+  # ALERTS: Alertmanager
+  # =========================
+  alertmanager:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/alertmanager@sha256:75360f5c797a42b6882147ed88f3f7e714e9fad64dade2f8029f2c4b64a70dd1
+    networks: [platform_net]
+    volumes:
+      - alertmanager_data:/alertmanager
+    configs:
+      - source: alertmanager_yml
+        target: /etc/alertmanager/alertmanager.yml
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    deploy:
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # =========================
+  # LOGS: Loki
+  # =========================
+  loki:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/loki@sha256:9b6c06e988c990dc089424180df4a810758786f9341bb3deafbcb8b6698d2e9e
+    networks: [platform_net]
+    volumes:
+      - loki_data:/loki
+    configs:
+      - source: loki_yml
+        target: /etc/loki/loki.yml
+    command: ["-config.file=/etc/loki/loki.yml"]
+    deploy:
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 256M
+
+  # =========================
+  # LOG SHIPPER: Grafana Alloy (global)
+  # =========================
+  alloy:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/alloy@sha256:41e0ad9b7c74cdc0a01ca8ce10f8d8262d49029167fd0b1d2db84a0f10468284
+    networks: [platform_net]
+    configs:
+      - source: alloy_config
+        target: /etc/alloy/config.alloy
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy_data:/var/lib/alloy
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    deploy:
+      mode: global
+      labels:
+        - traefik.enable=false
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+        reservations:
+          memory: 32M
+
+  # =========================
+  # EXPORTERS: node-exporter (global)
+  # =========================
+  node-exporter:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/node-exporter@sha256:7bcf2839f207d926b908cd3c566c9f1577efb72268062be0c96cd3b17a5cb283
+    networks: [platform_net]
+    hostname: "node-exporter-{{.Node.Hostname}}"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /var/lib/node_exporter/textfile_collector:/var/lib/node_exporter/textfile_collector:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 64M
+        reservations:
+          memory: 16M
+
+  # =========================
+  # EXPORTERS: cAdvisor (global)
+  # =========================
+  cadvisor:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/cadvisor@sha256:78ae90d60432609208a2db1b446a6f64da60b433cacd5dff2cd2e44eba280653
+    networks: [platform_net]
+    hostname: "cadvisor-{{.Node.Hostname}}"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  # =========================
+  # SYNTHETICS: blackbox exporter 
+  # =========================
+  blackbox-exporter:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/blackbox-exporter@sha256:43027b43fb785b7c5adc53bd3b5dbc1a258270a2e8aff24f477b45c4e38dac68
+    networks: [platform_net]
+    configs:
+      - source: blackbox_yml
+        target: /etc/blackbox_exporter/config.yml
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    deploy:
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 64M
+        reservations:
+          memory: 32M
+
+  # =========================
+  # UI: Grafana (behind Traefik + Keycloak OAuth2 Proxy)
+  # =========================
+  grafana:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/grafana@sha256:793c8719b0043ed885d1e75200a62d8adf63f0eae00f6f12b7a98eb7293a525c
+    networks: [platform_net, public_net]
+    volumes:
+      - grafana_data:/var/lib/grafana
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+      - source: grafana_dashboards
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: grafana_platform_cluster
+        target: /var/lib/grafana/dashboards/platform/platform-cluster.json
+      - source: grafana_platform_containers
+        target: /var/lib/grafana/dashboards/platform/platform-containers.json
+      - source: grafana_platform_ingress
+        target: /var/lib/grafana/dashboards/platform/platform-ingress.json
+      - source: grafana_platform_observability
+        target: /var/lib/grafana/dashboards/platform/platform-observability.json
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=https://monitoring.${DOMAIN}
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+
+      # Grafana trusts auth headers from the reverse proxy (Traefik)
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-Auth-Request-Email
+      - GF_AUTH_PROXY_HEADER_PROPERTY=email
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true      # creates user on first login
+      - GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN=true
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+
+      # optional hardening / UX
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    secrets:
+      - grafana_admin_password
+    deploy:
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=public_net
+        - traefik.http.routers.grafana.rule=Host(`monitoring.${DOMAIN}`)
+        - traefik.http.routers.grafana.entrypoints=websecure
+        - traefik.http.routers.grafana.tls.certresolver=le
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+        # Protect dashboard with ForwardAuth (middleware defined in oauth2-proxy stack)
+        - traefik.http.routers.grafana.middlewares=oauth-errors@swarm,auth@swarm
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+        reservations:
+          memory: 128M

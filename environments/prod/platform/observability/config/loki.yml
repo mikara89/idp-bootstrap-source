@@ -1,0 +1,90 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: info
+
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+# ---- Index / shipper backends ----
+storage_config:
+  # For the old boltdb-shipper period
+  boltdb_shipper:
+    active_index_directory: /loki/boltdb-index
+    cache_location: /loki/boltdb-cache
+
+  # For the new TSDB period (required for structured metadata / OTLP)
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+
+# ---- Schema: keep old, migrate new ----
+schema_config:
+  configs:
+    - from: 2025-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+    - from: 2026-02-07
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# ---- Ingestion ----
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+  wal:
+    enabled: true
+    dir: /loki/wal
+  chunk_idle_period: 30m
+  chunk_retain_period: 1m
+
+# ---- Querying ----
+querier:
+  max_concurrent: 2
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 64
+
+frontend:
+  max_outstanding_per_tenant: 2048
+
+# ---- Retention that actually deletes data ----
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+limits_config:
+  retention_period: 168h
+  allow_structured_metadata: true
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 6
+  max_query_parallelism: 2
+  max_streams_per_user: 5000
+  max_entries_limit_per_query: 5000

@@ -1,0 +1,40 @@
+# app-config.local.yaml — Backstage local development overrides
+#
+# Load this on top of app-config.yaml for local runs, for example:
+#   .\scripts\validate-backstage-config.ps1 -Profile local
+#
+# This file is not used by the production Swarm deployment.
+
+app:
+  baseUrl: http://localhost:3000
+
+backend:
+  baseUrl: http://localhost:7007
+
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+
+  database:
+    client: better-sqlite3
+    connection: ":memory:"
+
+auth:
+  environment: development
+  providers:
+    guest: {}
+
+integrations:
+  gitlab:
+    - host: gitlab.localhost
+      baseUrl: https://gitlab.localhost
+      apiBaseUrl: https://gitlab.localhost/api/v4
+      token: ${GITLAB_TOKEN}
+
+catalog:
+  locations:
+    - type: file
+      target: ./catalog/locations.yaml
+      rules:
+        - allow: [Location, User, Group, Component, System, API, Resource]

@@ -1,0 +1,18 @@
+# catalog/locations.yaml
+#
+# Bootstrap catalog locations. Backstage loads this at startup.
+# Add entries here as each service/repo adopts a catalog-info.yaml.
+#
+# Format reference:
+#   https://backstage.io/docs/features/software-catalog/descriptor-format#kind-location
+
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: platform-components
+  description: IDP platform service catalog — maintained by Platform Engineering
+spec:
+  # Self-registration: the IDP platform stack repo descriptor mounted by Swarm.
+  targets:
+    - /app/catalog/catalog-info.yaml
+    - /app/examples/template/template.yaml

@@ -1,0 +1,20 @@
+groups:
+  - name: cluster.rules
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: page
+          platform: "true"
+        annotations:
+          summary: "Node exporter down on {{ $labels.instance }}"
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.10
+        for: 10m
+        labels:
+          severity: page
+          platform: "true"
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"

@@ -1,0 +1,128 @@
+version: "3.8"
+
+networks:
+  public_net:
+    external: true
+  platform_net:
+    external: true
+  backstage_ingress_net:
+    external: true
+
+volumes:
+  traefik_data:
+
+secrets:
+  dns_api_token:
+    external: true
+    name: ${DNS_API_TOKEN_SECRET_NAME}
+
+services:
+  traefik:
+    # Bootstrap exception: Traefik creates the registry.${DOMAIN} route, so it
+    # must be pulled from upstream by digest until the private registry exists.
+    image: traefik@sha256:a9890c898f379c1905ee5b28342f6b408dc863f08db2dab20e46c267d1ff463a
+    networks:
+      - public_net
+      - platform_net
+      - backstage_ingress_net
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    volumes:
+      - traefik_data:/data
+      - /var/log/idp/traefik:/var/log/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    secrets:
+      - source: dns_api_token
+        target: /run/secrets/dns_api_token
+        uid: "0"
+        gid: "0"
+        mode: 444
+
+    environment:
+      CF_DNS_API_TOKEN_FILE: /run/secrets/dns_api_token
+      CF_API_EMAIL: "${ACME_EMAIL}"
+
+    command:
+      # Providers
+      - --providers.swarm=true
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.exposedbydefault=false
+      - --providers.swarm.network=public_net
+
+      # Entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+
+      - --entrypoints.websecure.http.tls=true
+      - --entrypoints.websecure.http.tls.certResolver=le
+      - --entrypoints.websecure.http.tls.domains[0].main=${DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN}
+
+      # TLS (ACME DNS-01 Challenge via Cloudflare)
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/data/acme.json
+      # - --certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      # DNS-01 Challenge via Cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=10
+      # # ACME HTTP-01 example)
+      # - --certificatesresolvers.le.acme.httpchallenge=true
+      # - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+
+      # Observability
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --accesslog.bufferingsize=100
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addentrypointslabels=true
+      - --metrics.prometheus.addrouterslabels=true
+      - --metrics.prometheus.addserviceslabels=true
+      - --entrypoints.metrics.address=:8899
+      - --metrics.prometheus.entryPoint=metrics
+
+      # Dashboard (keep internal; expose via labels behind SSO)
+      - --api.dashboard=true
+
+    deploy:
+      mode: replicated
+      # MVP single-ingress-node design: local ACME state is not shared.
+      # A future HA design needs shared certificate storage first.
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+      labels:
+        - traefik.enable=true
+
+        # Dashboard route: https://proxy.${DOMAIN}
+        - traefik.http.routers.traefik.rule=Host(`proxy.${DOMAIN}`)
+        - traefik.http.routers.traefik.entrypoints=websecure
+        - traefik.http.routers.traefik.tls.certresolver=le
+        - traefik.http.routers.traefik.service=api@internal
+        - traefik.http.services.traefik.loadbalancer.server.port=8080
+
+        # Narrow Slice 8 rate limit. This protects only proxy.${DOMAIN}; it is
+        # not a global edge policy.
+        - traefik.http.middlewares.proxy-ratelimit.ratelimit.average=30
+        - traefik.http.middlewares.proxy-ratelimit.ratelimit.period=1m
+        - traefik.http.middlewares.proxy-ratelimit.ratelimit.burst=15
+
+        # Protect dashboard with ForwardAuth (middleware defined in oauth2-proxy stack)
+        - traefik.http.routers.traefik.middlewares=proxy-ratelimit@swarm,oauth-errors@swarm,auth@swarm
