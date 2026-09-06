@@ -1,0 +1,32 @@
+stages: [validate, test, image, gitops]
+default:
+  tags:
+    - docker
+    - linux
+    - idp
+validate:
+  stage: validate
+  image: node:24-alpine
+  script: [node --check index.js]
+test:
+  stage: test
+  image: node:24-alpine
+  script: [npm test]
+image:
+  stage: image
+  image: quay.io/buildah/stable:v1.39.0
+  variables: { BUILDAH_ISOLATION: chroot, STORAGE_DRIVER: vfs }
+  script:
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - buildah bud -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+    - buildah push --digestfile image.digest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+  artifacts: { paths: [image.digest] }
+gitops:
+  stage: gitops
+  image: curlimages/curl:8.12.1
+  rules: [{ if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH' }]
+  script:
+    - test -n "$GITOPS_TRIGGER_TOKEN"
+    - test -n "$GITOPS_TARGET_REF"
+    - test -s image.digest
+    - curl --fail --request POST --form token="$GITOPS_TRIGGER_TOKEN" --form ref="$GITOPS_TARGET_REF" --form "variables[GOLDEN_PATH_SERVICE]=$CI_PROJECT_NAME" --form "variables[GOLDEN_PATH_PROJECT]=$CI_PROJECT_PATH" --form "variables[GOLDEN_PATH_IMAGE]=$CI_REGISTRY_IMAGE@$(cat image.digest)" --form "variables[GOLDEN_PATH_PORT]=3000" --form "variables[GOLDEN_PATH_EXPOSURE]=${{ values.exposure }}" --form "variables[GOLDEN_PATH_SOURCE_SHA]=$CI_COMMIT_SHA" "$GITOPS_TRIGGER_URL"

@@ -1,0 +1,205 @@
+stages:
+  - validate
+  - test
+  - image
+  - gitops
+
+default:
+  tags:
+    - docker
+    - linux
+    - idp
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $GOLDEN_PATH_SERVICE'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule"'
+    - when: never
+
+validate-platform:
+  stage: validate
+  image: mcr.microsoft.com/powershell:7.4-ubuntu-22.04
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+      when: never
+    - when: on_success
+  before_script:
+    - apt-get update
+    - apt-get install -y python3-pip
+    - python3 -m pip install --break-system-packages pyyaml
+  script:
+    - pwsh ./scripts/validate-platform-conventions.ps1
+    - pwsh ./scripts/tests/relative-path.tests.ps1
+    - pwsh ./scripts/tests/bootstrap-terraform-backend.tests.ps1
+    - pwsh ./scripts/tests/v2-topology.tests.ps1
+    - pwsh ./scripts/tests/v2-placement.tests.ps1
+    - pwsh ./scripts/tests/v2-gitlab.tests.ps1
+    - pwsh ./scripts/tests/v2-gitops-gitlab.tests.ps1
+    - pwsh ./scripts/tests/v2-backstage-gitlab.tests.ps1
+    - pwsh ./scripts/tests/v2-gitlab-registry.tests.ps1
+    - pwsh ./scripts/tests/v2-runner.tests.ps1
+
+backstage-build:
+  stage: test
+  image: node:24-bookworm-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+      when: never
+    - when: on_success
+  before_script:
+    - corepack enable
+  script:
+    - cd environments/prod/platform/backstage
+    - yarn install --immutable
+    - yarn tsc
+    - yarn build:backend
+
+runner-smoke:
+  stage: test
+  image: alpine:3.22
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+      when: never
+    - when: on_success
+  script:
+    - echo "Runner is executing a GitLab CI job"
+    - uname -a
+
+# Dedicated first-boot image supply. CI_PIPELINE_SOURCE=api is required so a
+# Golden Path service trigger cannot activate these jobs.
+build-backstage-image:
+  stage: image
+  image: quay.io/buildah/stable:v1.39.0
+  variables:
+    BUILDAH_ISOLATION: chroot
+    STORAGE_DRIVER: vfs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_BACKSTAGE_REQUIRED == "true"'
+    - when: never
+  script:
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - buildah bud --layers -f environments/prod/platform/backstage/Dockerfile -t "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" environments/prod/platform/backstage
+    - buildah push --digestfile backstage.digest "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA"
+    - printf 'BACKSTAGE_IMAGE_DIGEST=%s\n' "$(cat backstage.digest)" > image.env
+  artifacts:
+    reports:
+      dotenv: image.env
+
+mirror-platform-images:
+  stage: image
+  image: quay.io/skopeo/stable:v1.17.0
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_MISSING_PLATFORM_IMAGES'
+      when: on_success
+    - when: never
+  before_script:
+    - |
+      if ! command -v python3 >/dev/null 2>&1; then
+        if command -v microdnf >/dev/null 2>&1; then microdnf install -y python3
+        elif command -v dnf >/dev/null 2>&1; then dnf install -y python3
+        else echo 'python3 is required to validate trusted image targets' >&2; exit 1
+        fi
+      fi
+  script:
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | skopeo login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - test -n "$BOOTSTRAP_MISSING_PLATFORM_IMAGES"
+    - |
+      COPY_PLAN="$(python3 scripts/bootstrap-image-supply-plan.py emit-copy --manifest images/platform-images.yaml --names "$BOOTSTRAP_MISSING_PLATFORM_IMAGES")"
+      test -n "$COPY_PLAN"
+      while read -r source target digest; do
+        test -n "$source" && test -n "$target" && test -n "$digest"
+        skopeo copy --all --preserve-digests "docker://${source%@*}@${digest}" "docker://$CI_REGISTRY_IMAGE/$target"
+      done <<< "$COPY_PLAN"
+
+update-backstage-digest:
+  stage: gitops
+  image: alpine/git:2.47.2
+  needs: [build-backstage-image]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_BACKSTAGE_REQUIRED == "true"'
+    - when: never
+  script:
+    - test -n "$BACKSTAGE_IMAGE_DIGEST"
+    - git config user.name "IDP GitLab CI"
+    - git config user.email "idp-ci@local"
+    - git fetch origin "$CI_COMMIT_BRANCH"
+    - test "$(git rev-parse "origin/$CI_COMMIT_BRANCH")" = "$CI_COMMIT_SHA"
+    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    - printf '%s\n' '#!/bin/sh' 'case "$1" in *Username*) printf "%s" gitlab-ci-token ;; *) printf "%s" "$CI_JOB_TOKEN" ;; esac' > /tmp/git-askpass
+    - chmod 700 /tmp/git-askpass
+    - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
+    - sed -i -E "s#(backstage@sha256:)[a-f0-9]{64}#\\1${BACKSTAGE_IMAGE_DIGEST#sha256:}#" environments/prod/platform/backstage/stack.yml
+    - git add -- environments/prod/platform/backstage/stack.yml
+    - git diff --cached --quiet || git commit -m "chore(images): update Backstage digest [skip ci]"
+    - git push origin "HEAD:$CI_COMMIT_BRANCH"
+
+golden-path-update:
+  stage: gitops
+  image: alpine:3.22
+  resource_group: golden-path-definitions
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $GOLDEN_PATH_SERVICE'
+  before_script:
+    - apk add --no-cache git python3 py3-yaml
+  script:
+    - test -n "$PLATFORM_GITOPS_BRANCH"
+    - test "$CI_COMMIT_BRANCH" = "$PLATFORM_GITOPS_BRANCH"
+    - echo "$GOLDEN_PATH_SERVICE" | grep -Ex '[a-z0-9-]+'
+    - echo "$GOLDEN_PATH_PROJECT" | grep -Ex "platform/services/$GOLDEN_PATH_SERVICE"
+    - TRUSTED_REGISTRY="registry.${CI_SERVER_HOST#gitlab.}"
+    - test "$TRUSTED_REGISTRY" != "registry."
+    - echo "$TRUSTED_REGISTRY" | grep -Ex 'registry\.[a-z0-9.-]+'
+    - echo "$GOLDEN_PATH_IMAGE" | grep -E "^${TRUSTED_REGISTRY}/platform/services/$GOLDEN_PATH_SERVICE@sha256:[a-f0-9]{64}$"
+    - echo "$GOLDEN_PATH_PORT" | grep -E '^[0-9]+$'
+    - test "$GOLDEN_PATH_PORT" -ge 1 -a "$GOLDEN_PATH_PORT" -le 65535
+    - test "$GOLDEN_PATH_EXPOSURE" = internal -o "$GOLDEN_PATH_EXPOSURE" = authenticated-web
+    - echo "$GOLDEN_PATH_SOURCE_SHA" | grep -E '^[a-f0-9]{40,64}$'
+    - git config user.name "IDP GitLab CI"
+    - git config user.email "idp-ci@local"
+    - git fetch origin "$CI_COMMIT_BRANCH"
+    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    - |
+      mkdir -p environments/prod/apps/definitions
+      cat > "environments/prod/apps/definitions/${GOLDEN_PATH_SERVICE}.yaml" <<EOF
+      apiVersion: idp.platform/v1
+      kind: SwarmService
+      metadata:
+        name: $GOLDEN_PATH_SERVICE
+      spec:
+        source:
+          projectPath: $GOLDEN_PATH_PROJECT
+        image:
+          repository: $GOLDEN_PATH_IMAGE
+        runtime:
+          port: $GOLDEN_PATH_PORT
+        exposure:
+          mode: $GOLDEN_PATH_EXPOSURE
+        health:
+          path: /healthz
+        readiness:
+          path: /readyz
+        metrics:
+          enabled: true
+          path: /metrics
+      EOF
+    - python3 scripts/render-apps-stack.py --registry "$TRUSTED_REGISTRY"
+    - python3 -c "import yaml; yaml.safe_load(open('environments/prod/apps/stack.yml')); yaml.safe_load(open('environments/prod/platform/observability/config/file_sd/apps.yml'))"
+    - git diff --check
+    - python3 scripts/golden-path-stage-commit.py
+    - printf '%s\n' '#!/bin/sh' 'case "$1" in *Username*) printf "%s" gitlab-ci-token ;; *) printf "%s" "$CI_JOB_TOKEN" ;; esac' > /tmp/git-askpass
+    - chmod 700 /tmp/git-askpass
+    - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
+    - git push origin "HEAD:$CI_COMMIT_BRANCH"
