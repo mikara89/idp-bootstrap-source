@@ -143,7 +143,9 @@ update-backstage-digest:
     - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
     - sed -i -E "s#(backstage@sha256:)[a-f0-9]{64}#\\1${BACKSTAGE_IMAGE_DIGEST#sha256:}#" environments/prod/platform/backstage/stack.yml
     - git add -- environments/prod/platform/backstage/stack.yml
-    - git diff --cached --quiet || git commit -m "chore(images): update Backstage digest [skip ci]"
+    - |
+      git diff --cached --quiet || \
+        git commit -m "chore(images): update Backstage digest [skip ci]"
     - git push origin "HEAD:$CI_COMMIT_BRANCH"
 
 golden-path-update:
