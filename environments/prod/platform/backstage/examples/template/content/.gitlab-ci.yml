@@ -14,12 +14,22 @@ test:
   script: [npm test]
 image:
   stage: image
-  image: quay.io/buildah/stable:v1.39.0
-  variables: { BUILDAH_ISOLATION: chroot, STORAGE_DRIVER: vfs }
+  # Mapping syntax with an empty entrypoint so the Docker executor can run the
+  # job shell instead of the upstream OCI tool entrypoint.
+  image:
+    name: quay.io/buildah/stable:v1.39.0
+    entrypoint: [""]
+  variables:
+    # Rootless Buildah layers through fuse-overlayfs. VFS is rejected because it
+    # amplifies layer storage and can exhaust the Runner host disk. Keep this
+    # aligned with the platform bootstrap image build.
+    BUILDAH_ISOLATION: chroot
+    STORAGE_DRIVER: overlay
+    BUILDAH_STORAGE_OPT: overlay.mount_program=/usr/bin/fuse-overlayfs
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah bud -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
-    - buildah push --digestfile image.digest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile image.digest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
   artifacts: { paths: [image.digest] }
 gitops:
   stage: gitops

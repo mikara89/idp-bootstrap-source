@@ -82,8 +82,13 @@ build-backstage-image:
     name: quay.io/buildah/stable:v1.39.0
     entrypoint: [""]
   variables:
+    # Rootless Buildah stores layers through fuse-overlayfs. VFS is rejected for
+    # these builds: live commissioning measured >30 GB transient layer
+    # amplification for the Backstage dependency tree and exhausted the VM3 root
+    # disk. The Runner passes /dev/fuse into the job container.
     BUILDAH_ISOLATION: chroot
-    STORAGE_DRIVER: vfs
+    STORAGE_DRIVER: overlay
+    BUILDAH_STORAGE_OPT: overlay.mount_program=/usr/bin/fuse-overlayfs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
@@ -91,8 +96,8 @@ build-backstage-image:
     - when: never
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah bud --layers -f environments/prod/platform/backstage/Dockerfile -t "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" environments/prod/platform/backstage
-    - buildah push --digestfile backstage.digest "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA"
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --layers -f environments/prod/platform/backstage/Dockerfile -t "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" environments/prod/platform/backstage
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile backstage.digest "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA"
     - printf 'BACKSTAGE_IMAGE_DIGEST=%s\n' "$(cat backstage.digest)" > image.env
   artifacts:
     reports:
