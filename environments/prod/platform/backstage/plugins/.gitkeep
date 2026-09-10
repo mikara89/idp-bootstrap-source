@@ -1,0 +1,4 @@
+# Keeps the Backstage plugins workspace present so the Dockerfile
+# "COPY plugins plugins" step has a build-context source directory.
+# The generated public bootstrap snapshot strips *.md files, so a README-only
+# directory would disappear and break the Backstage image build.

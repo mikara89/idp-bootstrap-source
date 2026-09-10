@@ -124,7 +124,7 @@ mirror-platform-images:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | skopeo login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - test -n "$BOOTSTRAP_MISSING_PLATFORM_IMAGES"
     - |
-      COPY_PLAN="$(python3 scripts/bootstrap-image-supply-plan.py emit-copy --manifest images/platform-images.yaml --names "$BOOTSTRAP_MISSING_PLATFORM_IMAGES")"
+      COPY_PLAN="$(python3 scripts/bootstrap-image-supply-plan.py --manifest images/platform-images.yaml emit-copy --names "$BOOTSTRAP_MISSING_PLATFORM_IMAGES")"
       test -n "$COPY_PLAN"
       while read -r source target digest; do
         test -n "$source" && test -n "$target" && test -n "$digest"
