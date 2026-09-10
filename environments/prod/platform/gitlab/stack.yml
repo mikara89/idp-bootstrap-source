@@ -21,7 +21,11 @@ services:
   gitlab:
     # GitLab CE 19.3.1-ce.0, pinned for controlled Omnibus upgrades.
     image: gitlab/gitlab-ce:19.3.1-ce.0
-    hostname: gitlab.${DOMAIN}
+    # Internal Docker hostname only. The Traefik-routed public FQDN must not be
+    # claimed here: GitLab and the Runner share platform_net, so Docker embedded
+    # DNS would answer for gitlab.${DOMAIN} inside the overlay and clients would
+    # dial this task directly on port 443, bypassing Traefik TLS termination.
+    hostname: gitlab
     networks:
       - public_net
       - platform_net
