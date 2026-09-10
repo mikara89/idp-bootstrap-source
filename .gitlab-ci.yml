@@ -76,6 +76,7 @@ runner-smoke:
 # Golden Path service trigger cannot activate these jobs.
 build-backstage-image:
   stage: image
+  timeout: 2h
   # Mapping syntax with an empty entrypoint so the Docker executor can run the
   # job shell instead of the upstream OCI tool entrypoint.
   image:
