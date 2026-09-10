@@ -76,7 +76,11 @@ runner-smoke:
 # Golden Path service trigger cannot activate these jobs.
 build-backstage-image:
   stage: image
-  image: quay.io/buildah/stable:v1.39.0
+  # Mapping syntax with an empty entrypoint so the Docker executor can run the
+  # job shell instead of the upstream OCI tool entrypoint.
+  image:
+    name: quay.io/buildah/stable:v1.39.0
+    entrypoint: [""]
   variables:
     BUILDAH_ISOLATION: chroot
     STORAGE_DRIVER: vfs
@@ -96,7 +100,12 @@ build-backstage-image:
 
 mirror-platform-images:
   stage: image
-  image: quay.io/skopeo/stable:v1.17.0
+  # Mapping syntax with an empty entrypoint so the Docker executor can run the
+  # job shell instead of the upstream OCI tool entrypoint. Without this, Skopeo
+  # consumes the shell "-c" flag and fails with "unknown shorthand flag: 'c'".
+  image:
+    name: quay.io/skopeo/stable:v1.17.0
+    entrypoint: [""]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
@@ -143,9 +152,7 @@ update-backstage-digest:
     - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
     - sed -i -E "s#(backstage@sha256:)[a-f0-9]{64}#\\1${BACKSTAGE_IMAGE_DIGEST#sha256:}#" environments/prod/platform/backstage/stack.yml
     - git add -- environments/prod/platform/backstage/stack.yml
-    - |
-      git diff --cached --quiet || \
-        git commit -m "chore(images): update Backstage digest [skip ci]"
+    - git diff --cached --quiet || git commit -m "chore(images): update Backstage digest [skip ci]"
     - git push origin "HEAD:$CI_COMMIT_BRANCH"
 
 golden-path-update:
