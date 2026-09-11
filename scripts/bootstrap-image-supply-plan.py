@@ -17,6 +17,10 @@ from pathlib import Path
 
 TERMINAL_FAIL = frozenset({"failed", "canceled", "skipped", "manual"})
 NAME_RE = re.compile(r"^[a-z0-9-]+$")
+REPOSITORY_COMPONENT_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
+REGISTRY_HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+TAG_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 BOOTSTRAP_JOBS = frozenset(
     {"build-backstage-image", "mirror-platform-images", "update-backstage-digest"}
 )
@@ -41,6 +45,57 @@ class Plan:
         return ",".join(self.missing_platform)
 
 
+def source_repository(source: str) -> str:
+    """Return the repository portion of a tagged OCI source reference."""
+    if not isinstance(source, str) or not source or source != source.strip():
+        raise ValueError(f"invalid image source: {source!r}")
+    if any(character.isspace() or ord(character) < 0x21 for character in source):
+        raise ValueError(f"invalid image source: {source!r}")
+    if "@" in source:
+        raise ValueError("image source must not contain a digest")
+
+    tag_separator = source.rfind(":")
+    last_slash = source.rfind("/")
+    if tag_separator <= last_slash:
+        raise ValueError(f"image source must contain a final tag: {source!r}")
+    repository = source[:tag_separator]
+    tag = source[tag_separator + 1 :]
+    if not repository or not TAG_RE.fullmatch(tag):
+        raise ValueError(f"invalid image source tag: {source!r}")
+
+    components = repository.split("/")
+    if any(not component for component in components):
+        raise ValueError(f"invalid image repository: {source!r}")
+
+    first = components[0]
+    has_registry = len(components) > 1 and (
+        "." in first or ":" in first or first == "localhost"
+    )
+    if has_registry:
+        if first.count(":") > 1:
+            raise ValueError(f"invalid registry host: {source!r}")
+        host, separator, port = first.partition(":")
+        if not REGISTRY_HOST_RE.fullmatch(host):
+            raise ValueError(f"invalid registry host: {source!r}")
+        if separator and (not port.isdigit() or not 1 <= int(port) <= 65535):
+            raise ValueError(f"invalid registry port: {source!r}")
+        components = components[1:]
+
+    if not components or any(
+        not REPOSITORY_COMPONENT_RE.fullmatch(component) for component in components
+    ):
+        raise ValueError(f"invalid image repository: {source!r}")
+    return repository
+
+
+def pinned_source(source: str, digest: str) -> str:
+    """Build the immutable source reference from trusted manifest fields."""
+    repository = source_repository(source)
+    if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
+        raise ValueError(f"invalid image digest for {source!r}")
+    return f"{repository}@{digest}"
+
+
 def load_manifest(path: Path) -> tuple[Image, ...]:
     images: list[Image] = []
     current: dict[str, str] = {}
@@ -54,8 +109,7 @@ def load_manifest(path: Path) -> tuple[Image, ...]:
             raise ValueError(f"incomplete manifest entry missing {missing}: {current}")
         if not NAME_RE.fullmatch(current["name"]):
             raise ValueError(f"invalid manifest image name: {current['name']}")
-        if not current["digest"].startswith("sha256:") or len(current["digest"]) != 71:
-            raise ValueError(f"invalid digest for {current['name']}")
+        pinned_source(current["source"], current["digest"])
         images.append(
             Image(
                 name=current["name"],
@@ -216,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     specs = copy_specs(images, _parse_names(args.names))
     for image in specs:
-        sys.stdout.write(f"{image.source} {image.target} {image.digest}\n")
+        sys.stdout.write(f"{pinned_source(image.source, image.digest)} {image.target} {image.digest}\n")
     return 0
 
 

@@ -134,7 +134,7 @@ mirror-platform-images:
       test -n "$COPY_PLAN"
       while read -r source target digest; do
         test -n "$source" && test -n "$target" && test -n "$digest"
-        skopeo copy --all --preserve-digests "docker://${source%@*}@${digest}" "docker://$CI_REGISTRY_IMAGE/$target"
+        skopeo copy --all --preserve-digests "docker://$source" "docker://$CI_REGISTRY_IMAGE/$target"
       done <<< "$COPY_PLAN"
 
 update-backstage-digest:
