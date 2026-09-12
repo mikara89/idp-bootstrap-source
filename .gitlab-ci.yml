@@ -129,12 +129,18 @@ mirror-platform-images:
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | skopeo login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - test -n "$BOOTSTRAP_MISSING_PLATFORM_IMAGES"
+    # Skopeo's own bounded retry absorbs short-lived upstream/CDN read failures.
+    # A live run died with repeated `unexpected EOF` from cdn01.quay.io while
+    # walking the Keycloak manifest list, which is not a digest problem. Its
+    # default exponential backoff is used deliberately (the pinned skopeo
+    # 1.17.0 has no --retry-delay flag), and exhausted retries still fail the
+    # job closed.
     - |
       COPY_PLAN="$(python3 scripts/bootstrap-image-supply-plan.py --manifest images/platform-images.yaml emit-copy --names "$BOOTSTRAP_MISSING_PLATFORM_IMAGES")"
       test -n "$COPY_PLAN"
       while read -r source target digest; do
         test -n "$source" && test -n "$target" && test -n "$digest"
-        skopeo copy --all --preserve-digests "docker://$source" "docker://$CI_REGISTRY_IMAGE/$target"
+        skopeo copy --all --preserve-digests --retry-times 5 "docker://$source" "docker://$CI_REGISTRY_IMAGE/$target"
       done <<< "$COPY_PLAN"
 
 update-backstage-digest:
