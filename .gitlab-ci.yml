@@ -158,7 +158,14 @@ update-backstage-digest:
     - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
     - sed -i -E "s#(backstage@sha256:)[a-f0-9]{64}#\\1${BACKSTAGE_IMAGE_DIGEST#sha256:}#" environments/prod/platform/backstage/stack.yml
     - git add -- environments/prod/platform/backstage/stack.yml
-    - git diff --cached --quiet || git commit -m "chore(images): update Backstage digest [skip ci]"
+    # Folded scalar: an unquoted plain scalar containing ": " (as in the
+    # conventional-commit subject below) parses as a YAML mapping, and GitLab
+    # then rejects the whole pipeline with
+    #   jobs:update-backstage-digest:script config should be a string
+    #   or a nested array of strings up to 10 levels deep
+    - >-
+      git diff --cached --quiet ||
+      git commit -m "chore(images): update Backstage digest [skip ci]"
     - git push origin "HEAD:$CI_COMMIT_BRANCH"
 
 golden-path-update:
