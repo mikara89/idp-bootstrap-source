@@ -203,7 +203,7 @@ services:
   # EXPORTERS: cAdvisor (global)
   # =========================
   cadvisor:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/cadvisor@sha256:78ae90d60432609208a2db1b446a6f64da60b433cacd5dff2cd2e44eba280653
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/cadvisor@sha256:e02855207ec07bb45ee41f720645945251f093f24c28f8c29cf718490f784922
     networks: [platform_net]
     hostname: "cadvisor-{{.Node.Hostname}}"
     volumes:

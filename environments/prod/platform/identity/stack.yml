@@ -32,7 +32,7 @@ secrets:
 
 services:
   keycloak:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:e5fabde243a03c8ed5052fa3d481cf56bc6bbf42a6383c5f2db40f2b33c2de26
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:dea26401d06341095cc4ea9d66896200b55de5ca1daa1d2fcbe58493afa6e0ad
     networks:
       - public_net
       - platform_net
@@ -88,7 +88,7 @@ services:
         - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
 
   keycloak-bootstrap:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:e5fabde243a03c8ed5052fa3d481cf56bc6bbf42a6383c5f2db40f2b33c2de26
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/keycloak@sha256:dea26401d06341095cc4ea9d66896200b55de5ca1daa1d2fcbe58493afa6e0ad
     networks:
       - platform_net
     environment:

@@ -21,7 +21,7 @@ configs:
 
 services:
   oauth2-proxy:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/oauth2-proxy@sha256:685d3823eebab3a9eec699f86154ebd11370228e453355a42a06cf16a5550fd1
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/oauth2-proxy@sha256:121cdc6520a02d7a2ddd181af6dbdc0f11f7d0c0d9353a999a69c3998cbfe37e
     networks:
       - public_net
       - platform_net

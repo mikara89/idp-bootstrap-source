@@ -35,7 +35,7 @@ secrets:
 
 services:
   platform-db:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:e34f4120a6b433e93d9678ce21e0f7ea9c0c1540ab37fad77bf1e943e2bbba13
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     networks:
       platform_net:
         aliases:
@@ -77,7 +77,7 @@ services:
         max_attempts: 5
 
   platform-db-bootstrap:
-    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:e34f4120a6b433e93d9678ce21e0f7ea9c0c1540ab37fad77bf1e943e2bbba13
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     networks:
       - platform_net
     environment:
