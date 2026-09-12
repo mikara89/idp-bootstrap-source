@@ -139,7 +139,13 @@ mirror-platform-images:
 
 update-backstage-digest:
   stage: gitops
-  image: alpine/git:2.47.2
+  # Mapping syntax with an empty entrypoint so the Docker executor can run the
+  # job shell instead of the upstream OCI tool entrypoint. Without this, the
+  # alpine/git ENTRYPOINT consumes the shell command and Git fails with
+  # "git: 'sh' is not a git command. See 'git --help'.".
+  image:
+    name: alpine/git:2.47.2
+    entrypoint: [""]
   needs: [build-backstage-image]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
