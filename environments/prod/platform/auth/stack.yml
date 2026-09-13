@@ -39,6 +39,12 @@ services:
       - --config=/etc/oauth2-proxy.cfg
 
     healthcheck:
+      # The pinned oauth2-proxy image is distroless: it ships only
+      # /bin/oauth2-proxy with no shell, curl, or wget, so an in-container
+      # /ping probe would require changing the image. The binary check below
+      # only proves the image is intact; listener reachability is covered
+      # instead by the external blackbox probe (probe_success{probe="oauth2-proxy-ping"}
+      # against http://oauth2-proxy:4180/ping) and the OAuth2ProxyDown alert.
       test: ["CMD", "/bin/oauth2-proxy", "--version"]
       interval: 30s
       timeout: 5s
