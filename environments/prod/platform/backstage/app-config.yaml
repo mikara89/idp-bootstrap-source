@@ -28,7 +28,7 @@ catalog:
     pullRequestBranchName: backstage-integration
 
   rules:
-    - allow: [Component, System, API, Resource, Location, User, Group]
+    - allow: [Component, System, Domain, API, Resource, Location, User, Group]
 
 techdocs:
   builder: external

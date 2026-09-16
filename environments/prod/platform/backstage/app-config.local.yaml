@@ -37,4 +37,4 @@ catalog:
     - type: file
       target: ./catalog/locations.yaml
       rules:
-        - allow: [Location, User, Group, Component, System, API, Resource]
+        - allow: [Location, Domain, User, Group, Component, System, API, Resource, Template]

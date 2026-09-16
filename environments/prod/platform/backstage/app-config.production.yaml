@@ -113,8 +113,10 @@ jenkins:
 # CATALOG
 # =============================================================================
 catalog:
+  # The built-in platform bootstrap catalog defines a Domain, a System, an API,
+  # Resources, and Components, so the global allow-list must accept that model.
   rules:
-    - allow: [Component, System, API, Resource, Location, User, Group]
+    - allow: [Component, System, Domain, API, Resource, Location, User, Group]
 
   locations:
     # Bootstrap org data (mounted from catalog/users-groups.yaml via Swarm config)
@@ -123,11 +125,14 @@ catalog:
       rules:
         - allow: [User, Group]
 
-    # Catalog locations (mounted from catalog/locations.yaml via Swarm config)
+    # Catalog locations (mounted from catalog/locations.yaml via Swarm config).
+    # This location owns both the platform descriptor (Domain/System/API/
+    # Resource/Component) and the Golden Path scaffolder Template, so it is the
+    # only place Template is allowed.
     - type: file
       target: /app/catalog/locations.yaml
       rules:
-        - allow: [Location, Component, System, API, Resource]
+        - allow: [Location, Domain, Component, System, API, Resource, Template]
 
   providers:
     gitlab:
