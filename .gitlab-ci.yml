@@ -90,6 +90,10 @@ build-backstage-image:
     BUILDAH_ISOLATION: chroot
     STORAGE_DRIVER: overlay
     BUILDAH_STORAGE_OPT: overlay.mount_program=/usr/bin/fuse-overlayfs
+    # The source-revision proof below walks commit history. The Runner default of
+    # 50 commits can truncate it, which would either fail the proof or resolve a
+    # stale source revision, so this job clones the full history.
+    GIT_DEPTH: 0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
@@ -97,9 +101,27 @@ build-backstage-image:
     - when: never
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --layers -f environments/prod/platform/backstage/Dockerfile -t "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" environments/prod/platform/backstage
-    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile backstage.digest "$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE/backstage:$CI_COMMIT_SHA"
-    - printf 'BACKSTAGE_IMAGE_DIGEST=%s\n' "$(cat backstage.digest)" > image.env
+    # The image tag must identify the actual Backstage build input, not merely the
+    # branch tip: a digest-only GitOps commit lands on the branch after the source
+    # revision, so tagging $CI_COMMIT_SHA would tag a commit that changed no
+    # build input. Commissioning passes the authoritative source revision it
+    # computed from the same source set, and this job refuses to build unless its
+    # own checkout proves that revision. The pathspec is the Backstage build
+    # context minus the runtime-only stack pin, which is the source set
+    # commissioning uses in scripts/backstage-image-freshness.py.
+    - |
+      set -eu
+      : "${BOOTSTRAP_BACKSTAGE_SOURCE_REVISION:?commissioning must supply the authoritative Backstage source revision}"
+      printf '%s\n' "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION" | grep -Eq '^[a-f0-9]{40,64}$'
+      SOURCE_REVISION="$(git log -1 --format=%H -- 'environments/prod/platform/backstage' ':(exclude)environments/prod/platform/backstage/stack.yml')"
+      test -n "$SOURCE_REVISION"
+      if [ "$SOURCE_REVISION" != "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION" ]; then
+        echo "refusing to build: requested Backstage source revision $BOOTSTRAP_BACKSTAGE_SOURCE_REVISION does not match this checkout ($SOURCE_REVISION)" >&2
+        exit 1
+      fi
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --layers -f environments/prod/platform/backstage/Dockerfile -t "$CI_REGISTRY_IMAGE/backstage:$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION" environments/prod/platform/backstage
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile backstage.digest "$CI_REGISTRY_IMAGE/backstage:$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION" "docker://$CI_REGISTRY_IMAGE/backstage:$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION"
+    - printf 'BACKSTAGE_IMAGE_DIGEST=%s\nBACKSTAGE_IMAGE_SOURCE_REVISION=%s\n' "$(cat backstage.digest)" "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION" > image.env
   artifacts:
     reports:
       dotenv: image.env
@@ -160,6 +182,11 @@ update-backstage-digest:
     - when: never
   script:
     - test -n "$BACKSTAGE_IMAGE_DIGEST"
+    # Bind the pinned digest to the source revision commissioning asked for, so
+    # this job can only pin an image that was built from that source.
+    - test -n "$BACKSTAGE_IMAGE_SOURCE_REVISION"
+    - test -n "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION"
+    - test "$BACKSTAGE_IMAGE_SOURCE_REVISION" = "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION"
     - git config user.name "IDP GitLab CI"
     - git config user.email "idp-ci@local"
     - git fetch origin "$CI_COMMIT_BRANCH"
