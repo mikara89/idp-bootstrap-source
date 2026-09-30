@@ -94,6 +94,14 @@ build-backstage-image:
     # 50 commits can truncate it, which would either fail the proof or resolve a
     # stale source revision, so this job clones the full history.
     GIT_DEPTH: 0
+  before_script:
+    # The pinned Buildah image does not ship Git, but the source-revision proof
+    # below must independently inspect this checkout. git-core was verified in
+    # quay.io/buildah/stable:v1.39.0 and provides /usr/bin/git.
+    - microdnf install -y git-core
+    - microdnf clean all
+    - command -v git
+    - git --version
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
