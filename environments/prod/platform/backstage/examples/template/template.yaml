@@ -9,7 +9,7 @@ spec:
   type: service
   parameters:
     - title: Service details
-      required: [name, description, exposure]
+      required: [name, description, exposure, owner, resourceProfile]
       properties:
         name:
           title: Name
@@ -25,6 +25,37 @@ spec:
           type: string
           default: internal
           enum: [internal, authenticated-web]
+        owner:
+          title: Catalog owner
+          type: string
+          default: group:default/platform-team
+          pattern: '^(group|user):[a-z0-9][a-z0-9._/-]*$'
+        resourceProfile:
+          title: Resource profile
+          type: string
+          default: small
+          enum: [small, medium]
+        port:
+          title: Application port
+          type: integer
+          default: 3000
+          minimum: 1
+          maximum: 65535
+        runtimeEnvironment:
+          title: Non-secret environment settings
+          type: object
+          additionalProperties:
+            type: string
+          default: {}
+          description: Values are committed to the platform runtime repository. Never enter passwords, tokens, or private keys.
+        secretReferences:
+          title: Approved secret references
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [database-url, api-key, oauth-client-secret]
+          default: []
     - title: GitLab repository
       required: [repoUrl]
       properties:
@@ -45,7 +76,14 @@ spec:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
           exposure: ${{ parameters.exposure }}
+          owner: ${{ parameters.owner }}
+          resourceProfile: ${{ parameters.resourceProfile }}
+          port: ${{ parameters.port }}
+          runtimeEnvironmentJson: ${{ parameters.runtimeEnvironment | dump }}
+          secretReferencesJson: ${{ parameters.secretReferences | dump }}
           gitlabBaseUrl: https://gitlab.${DOMAIN}
+          monitoringBaseUrl: https://monitoring.${DOMAIN}
+          domain: ${DOMAIN}
     - id: publish
       name: Publish to GitLab
       action: publish:gitlab

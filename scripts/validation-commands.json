@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "domains": {
+    "core": [
+      [
+        "python",
+        "scripts/validate-agent-skills.py"
+      ],
+      [
+        "python",
+        "scripts/tests/agent-skills.tests.py"
+      ],
+      [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "scripts/validate-platform-conventions.ps1"
+      ],
+      [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "scripts/tests/relative-path.tests.ps1"
+      ],
+      [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "scripts/tests/v2-runtime-hardening.tests.ps1"
+      ],
+      [
+        "python",
+        "scripts/tests/platform-validation-scope.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/platform-validation-gate.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/platform-validation-workflow.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/external-endpoint-probe.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/development-readiness.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/golden-path-promotion.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/app-deployment-verifier.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/build-worker-delivery.tests.py"
+      ]
+    ],
+    "golden_path": [
+      [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "scripts/tests/v2-golden-path.tests.ps1"
+      ],
+      [
+        "python",
+        "scripts/tests/golden-path-promotion.tests.py"
+      ]
+    ],
+    "runtime_config": [
+      [
+        "python",
+        "scripts/tests/prepare-ansible-controller.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/validate-ansible-controller-bundle.tests.py"
+      ],
+      [
+        "python",
+        "scripts/render-runtime-configs.py",
+        "--help"
+      ]
+    ],
+    "provider_contract": [
+      [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "scripts/tests/infrastructure-provider-contract.tests.ps1"
+      ]
+    ]
+  },
+  "exported_runtime_tree": {
+    "commands": [
+      [
+        "python3",
+        "-m",
+        "py_compile",
+        "scripts/run-validation.py",
+        "scripts/bootstrap-image-supply-plan.py",
+        "scripts/backstage-image-freshness.py",
+        "scripts/golden-path-stage-commit.py",
+        "scripts/golden-path-promote.py",
+        "scripts/render-apps-stack.py"
+      ],
+      [
+        "sh",
+        "-n",
+        "scripts/buildah-build-hygiene.sh"
+      ],
+      [
+        "python3",
+        "scripts/bootstrap-image-supply-plan.py",
+        "--help"
+      ],
+      [
+        "python3",
+        "scripts/backstage-image-freshness.py",
+        "--help"
+      ],
+      [
+        "python3",
+        "scripts/render-apps-stack.py",
+        "--help"
+      ]
+    ],
+    "provisioned_by": "scripts/export-public-bootstrap.ps1",
+    "validation_is_distinct_from": "GitHub source-repository-only tests"
+  }
+}

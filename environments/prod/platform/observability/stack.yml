@@ -28,7 +28,8 @@ configs:
   apps_file_sd:
     file: ./config/file_sd/apps.yml
   alertmanager_yml:
-    file: ./config/alertmanager.yml
+    external: true
+    name: ${ALERTMANAGER_YML_CONFIG_NAME}
   grafana_datasources:
     file: ./config/grafana/datasources.yml
   grafana_dashboards:
@@ -53,6 +54,9 @@ secrets:
   grafana_admin_password:
     external: true
     name: ${GRAFANA_ADMIN_PASSWORD_SECRET_NAME}
+  alertmanager_smtp_password:
+    external: true
+    name: ${ALERTMANAGER_SMTP_PASSWORD_SECRET_NAME}
 
 services:
   # =========================
@@ -112,6 +116,9 @@ services:
     configs:
       - source: alertmanager_yml
         target: /etc/alertmanager/alertmanager.yml
+    secrets:
+      - source: alertmanager_smtp_password
+        target: alertmanager_smtp_password
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager

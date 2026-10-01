@@ -3,13 +3,20 @@ kind: Component
 metadata:
   name: ${{ values.name | dump }}
   description: ${{ values.description | dump }}
+  owner: ${{ values.owner | dump }}
   annotations:
     gitlab.com/project-slug: platform/services/${{ values.name }}
   links:
     - url: ${{ values.gitlabBaseUrl }}/platform/services/${{ values.name }}
       title: Source repository
+    - url: ${{ values.gitlabBaseUrl }}/platform/services/${{ values.name }}/-/pipelines
+      title: CI pipeline
+    - url: ${{ values.monitoringBaseUrl }}
+      title: Logs and dashboards
+    - url: ${{ values.gitlabBaseUrl }}/platform/services/${{ values.name }}/-/blob/main/README.md
+      title: Service runbook and deployment verification
 spec:
   type: service
-  owner: group:default/platform-team
+  owner: ${{ values.owner | dump }}
   system: internal-developer-platform
   lifecycle: experimental

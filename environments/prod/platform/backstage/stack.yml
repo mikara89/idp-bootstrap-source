@@ -54,7 +54,7 @@ services:
       - backstage_db_net
     environment:
       NODE_ENV: production
-      NODE_OPTIONS: --max-old-space-size=384
+      NODE_OPTIONS: "--no-node-snapshot --max-old-space-size=384"
       DOMAIN: ${DOMAIN}
       BACKSTAGE_DEPLOY_REVISION: "73a4dda1-reroll-1"
       APP_CONFIG_app_baseUrl: "https://backstage.${DOMAIN}"

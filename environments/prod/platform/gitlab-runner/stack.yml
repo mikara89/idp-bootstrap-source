@@ -36,3 +36,40 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 5
+
+  # This Runner is provisioned only when the optional image-builder worker is
+  # enabled. GITLAB_BUILDER_RUNNER_ENABLED is deliberately the numeric replica
+  # count (0 or 1): `docker stack deploy` cannot conditionally omit a service.
+  # The default of zero keeps the established manager-hosted Runner topology
+  # unchanged while retaining one stack artifact for both modes.
+  gitlab-builder-runner:
+    # Keep the control-plane image aligned with the standard Runner. The
+    # builder-only executor and its concurrency/resource limits belong in the
+    # separate Runner TOML rendered by Ansible, not in this Compose file.
+    image: gitlab/gitlab-runner:alpine-v19.3.1
+    networks:
+      - platform_net
+    volumes:
+      # Docker interpolates every service before applying replicas. Keep a
+      # default so the disabled (zero-replica) service does not require a
+      # builder path, while enabled deployments can supply their provisioned
+      # worker-local path explicitly.
+      - ${GITLAB_BUILDER_RUNNER_DATA_PATH:-/mnt/idp/gitlab-builder-runner}:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      replicas: ${GITLAB_BUILDER_RUNNER_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.workload == builder
+          - node.labels.builder == true
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5

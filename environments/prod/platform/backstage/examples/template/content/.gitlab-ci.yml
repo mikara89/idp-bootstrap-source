@@ -4,6 +4,15 @@ default:
     - docker
     - linux
     - idp
+    - vm03
+variables:
+  # Retain the shared Runner until platform operators register and select the
+  # optional isolated builder Runner through a protected CI variable.
+  IDP_BUILD_RUNNER_TAG: "vm03"
+  GOLDEN_PATH_ENV_JSON: >-
+    ${{ values.runtimeEnvironmentJson }}
+  GOLDEN_PATH_SECRET_REFS_JSON: >-
+    ${{ values.secretReferencesJson }}
 validate:
   stage: validate
   image: node:24-alpine
@@ -14,6 +23,11 @@ test:
   script: [npm test]
 image:
   stage: image
+  tags:
+    - docker
+    - linux
+    - idp
+    - $IDP_BUILD_RUNNER_TAG
   # Mapping syntax with an empty entrypoint so the Docker executor can run the
   # job shell instead of the upstream OCI tool entrypoint.
   image:
@@ -26,11 +40,26 @@ image:
     BUILDAH_ISOLATION: chroot
     STORAGE_DRIVER: overlay
     BUILDAH_STORAGE_OPT: overlay.mount_program=/usr/bin/fuse-overlayfs
+    IDP_BUILD_CACHE_DIR: "$CI_PROJECT_DIR/.ci/buildah-storage"
+    CONTAINERS_STORAGE_CONF: "$CI_PROJECT_DIR/.ci/containers-storage.conf"
+  cache:
+    key:
+      prefix: node-service-buildah-v1.39.0-node24
+      files:
+        - package-lock.json
+        - Dockerfile
+    paths:
+      - .ci/buildah-storage/
+    policy: pull-push
+  before_script:
+    - sh ./scripts/buildah-build-hygiene.sh prepare
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --build-arg APP_PORT="${{ values.port }}" -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
     - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile image.digest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
   artifacts: { paths: [image.digest] }
+  after_script:
+    - sh ./scripts/buildah-build-hygiene.sh cleanup
 gitops:
   stage: gitops
   image: curlimages/curl:8.12.1
@@ -39,4 +68,4 @@ gitops:
     - test -n "$GITOPS_TRIGGER_TOKEN"
     - test -n "$GITOPS_TARGET_REF"
     - test -s image.digest
-    - curl --fail --request POST --form token="$GITOPS_TRIGGER_TOKEN" --form ref="$GITOPS_TARGET_REF" --form "variables[GOLDEN_PATH_SERVICE]=$CI_PROJECT_NAME" --form "variables[GOLDEN_PATH_PROJECT]=$CI_PROJECT_PATH" --form "variables[GOLDEN_PATH_IMAGE]=$CI_REGISTRY_IMAGE@$(cat image.digest)" --form "variables[GOLDEN_PATH_PORT]=3000" --form "variables[GOLDEN_PATH_EXPOSURE]=${{ values.exposure }}" --form "variables[GOLDEN_PATH_SOURCE_SHA]=$CI_COMMIT_SHA" "$GITOPS_TRIGGER_URL"
+    - curl --fail --request POST --form token="$GITOPS_TRIGGER_TOKEN" --form ref="$GITOPS_TARGET_REF" --form "variables[GOLDEN_PATH_SERVICE]=$CI_PROJECT_NAME" --form "variables[GOLDEN_PATH_PROJECT]=$CI_PROJECT_PATH" --form "variables[GOLDEN_PATH_IMAGE]=$CI_REGISTRY_IMAGE@$(cat image.digest)" --form "variables[GOLDEN_PATH_PORT]=${{ values.port }}" --form "variables[GOLDEN_PATH_EXPOSURE]=${{ values.exposure }}" --form "variables[GOLDEN_PATH_OWNER]=${{ values.owner }}" --form "variables[GOLDEN_PATH_PROFILE]=${{ values.resourceProfile }}" --form-string "variables[GOLDEN_PATH_ENV_JSON]=$GOLDEN_PATH_ENV_JSON" --form-string "variables[GOLDEN_PATH_SECRET_REFS_JSON]=$GOLDEN_PATH_SECRET_REFS_JSON" --form "variables[GOLDEN_PATH_SOURCE_SHA]=$CI_COMMIT_SHA" "$GITOPS_TRIGGER_URL"

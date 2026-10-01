@@ -9,6 +9,15 @@ default:
     - docker
     - linux
     - idp
+    # Only the existing shared Runner has vm03. Builder jobs override this
+    # default with the optional `builder` tag when that Runner is enabled.
+    - vm03
+
+# Image jobs are the only jobs that select the optional isolated builder. The
+# shared Runner remains the compatible default until Ansible has registered a
+# healthy `builder` Runner and an operator changes this protected variable.
+variables:
+  IDP_BUILD_RUNNER_TAG: "vm03"
 
 workflow:
   rules:
@@ -28,19 +37,10 @@ validate-platform:
     - when: on_success
   before_script:
     - apt-get update
-    - apt-get install -y python3-pip
-    - python3 -m pip install --break-system-packages pyyaml
+    - apt-get install -y python3-pip python-is-python3
+    - python3 -m pip install --break-system-packages pyyaml jinja2
   script:
-    - pwsh ./scripts/validate-platform-conventions.ps1
-    - pwsh ./scripts/tests/relative-path.tests.ps1
-    - pwsh ./scripts/tests/bootstrap-terraform-backend.tests.ps1
-    - pwsh ./scripts/tests/v2-topology.tests.ps1
-    - pwsh ./scripts/tests/v2-placement.tests.ps1
-    - pwsh ./scripts/tests/v2-gitlab.tests.ps1
-    - pwsh ./scripts/tests/v2-gitops-gitlab.tests.ps1
-    - pwsh ./scripts/tests/v2-backstage-gitlab.tests.ps1
-    - pwsh ./scripts/tests/v2-gitlab-registry.tests.ps1
-    - pwsh ./scripts/tests/v2-runner.tests.ps1
+    - python3 scripts/run-validation.py --mode exported-runtime
 
 backstage-build:
   stage: test
@@ -77,6 +77,11 @@ runner-smoke:
 build-backstage-image:
   stage: image
   timeout: 2h
+  tags:
+    - docker
+    - linux
+    - idp
+    - $IDP_BUILD_RUNNER_TAG
   # Mapping syntax with an empty entrypoint so the Docker executor can run the
   # job shell instead of the upstream OCI tool entrypoint.
   image:
@@ -94,7 +99,19 @@ build-backstage-image:
     # 50 commits can truncate it, which would either fail the proof or resolve a
     # stale source revision, so this job clones the full history.
     GIT_DEPTH: 0
+    IDP_BUILD_CACHE_DIR: "$CI_PROJECT_DIR/.ci/buildah-storage"
+    CONTAINERS_STORAGE_CONF: "$CI_PROJECT_DIR/.ci/containers-storage.conf"
+  cache:
+    key:
+      prefix: backstage-buildah-v1.39.0-node24
+      files:
+        - environments/prod/platform/backstage/yarn.lock
+        - environments/prod/platform/backstage/.yarnrc.yml
+    paths:
+      - .ci/buildah-storage/
+    policy: pull-push
   before_script:
+    - sh ./scripts/buildah-build-hygiene.sh prepare
     # The pinned Buildah image does not ship Git, but the source-revision proof
     # below must independently inspect this checkout. git-core was verified in
     # quay.io/buildah/stable:v1.39.0 and provides /usr/bin/git.
@@ -133,9 +150,16 @@ build-backstage-image:
   artifacts:
     reports:
       dotenv: image.env
+  after_script:
+    - sh ./scripts/buildah-build-hygiene.sh cleanup
 
 mirror-platform-images:
   stage: image
+  tags:
+    - docker
+    - linux
+    - idp
+    - $IDP_BUILD_RUNNER_TAG
   # Mapping syntax with an empty entrypoint so the Docker executor can run the
   # job shell instead of the upstream OCI tool entrypoint. Without this, Skopeo
   # consumes the shell "-c" flag and fails with "unknown shorthand flag: 'c'".
@@ -228,7 +252,7 @@ golden-path-update:
     - test "$CI_COMMIT_BRANCH" = "$PLATFORM_GITOPS_BRANCH"
     - echo "$GOLDEN_PATH_SERVICE" | grep -Ex '[a-z0-9-]+'
     - echo "$GOLDEN_PATH_PROJECT" | grep -Ex "platform/services/$GOLDEN_PATH_SERVICE"
-    - TRUSTED_REGISTRY="registry.${CI_SERVER_HOST#gitlab.}"
+    - export TRUSTED_REGISTRY="registry.${CI_SERVER_HOST#gitlab.}"
     - test "$TRUSTED_REGISTRY" != "registry."
     - echo "$TRUSTED_REGISTRY" | grep -Ex 'registry\.[a-z0-9.-]+'
     - echo "$GOLDEN_PATH_IMAGE" | grep -E "^${TRUSTED_REGISTRY}/platform/services/$GOLDEN_PATH_SERVICE@sha256:[a-f0-9]{64}$"
@@ -240,30 +264,7 @@ golden-path-update:
     - git config user.email "idp-ci@local"
     - git fetch origin "$CI_COMMIT_BRANCH"
     - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
-    - |
-      mkdir -p environments/prod/apps/definitions
-      cat > "environments/prod/apps/definitions/${GOLDEN_PATH_SERVICE}.yaml" <<EOF
-      apiVersion: idp.platform/v1
-      kind: SwarmService
-      metadata:
-        name: $GOLDEN_PATH_SERVICE
-      spec:
-        source:
-          projectPath: $GOLDEN_PATH_PROJECT
-        image:
-          repository: $GOLDEN_PATH_IMAGE
-        runtime:
-          port: $GOLDEN_PATH_PORT
-        exposure:
-          mode: $GOLDEN_PATH_EXPOSURE
-        health:
-          path: /healthz
-        readiness:
-          path: /readyz
-        metrics:
-          enabled: true
-          path: /metrics
-      EOF
+    - python3 scripts/golden-path-promote.py
     - python3 scripts/render-apps-stack.py --registry "$TRUSTED_REGISTRY"
     - python3 -c "import yaml; yaml.safe_load(open('environments/prod/apps/stack.yml')); yaml.safe_load(open('environments/prod/platform/observability/config/file_sd/apps.yml'))"
     - git diff --check
