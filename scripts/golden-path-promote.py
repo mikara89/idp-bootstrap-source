@@ -26,6 +26,13 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def optional_json(name, default):
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    return json.loads(value)
+
+
 def main():
     service = os.environ.get("GOLDEN_PATH_SERVICE", "")
     project = os.environ.get("GOLDEN_PATH_PROJECT", "")
@@ -44,8 +51,8 @@ def main():
         profile = os.environ.get("GOLDEN_PATH_PROFILE", "small")
         exposure = os.environ.get("GOLDEN_PATH_EXPOSURE", "internal")
         port = int(os.environ.get("GOLDEN_PATH_PORT", "3000"))
-        environment = json.loads(os.environ.get("GOLDEN_PATH_ENV_JSON", "{}"))
-        secrets = json.loads(os.environ.get("GOLDEN_PATH_SECRET_REFS_JSON", "[]"))
+        environment = optional_json("GOLDEN_PATH_ENV_JSON", {})
+        secrets = optional_json("GOLDEN_PATH_SECRET_REFS_JSON", [])
         require(re.fullmatch(r"(?:group|user):[a-z0-9][a-z0-9._/-]*", owner), "invalid owner")
         require(profile in ("small", "medium"), "invalid resource profile")
         require(exposure in ("internal", "authenticated-web"), "invalid exposure mode")

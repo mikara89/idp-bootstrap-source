@@ -21,7 +21,7 @@ test:
   stage: test
   image: node:24-alpine
   script: [npm test]
-image:
+build-image:
   stage: image
   tags:
     - docker

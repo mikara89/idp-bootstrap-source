@@ -79,8 +79,8 @@ spec:
           owner: ${{ parameters.owner }}
           resourceProfile: ${{ parameters.resourceProfile }}
           port: ${{ parameters.port }}
-          runtimeEnvironmentJson: ${{ parameters.runtimeEnvironment | dump }}
-          secretReferencesJson: ${{ parameters.secretReferences | dump }}
+          runtimeEnvironmentJson: ${{ parameters.runtimeEnvironment | default({}, true) | dump }}
+          secretReferencesJson: ${{ parameters.secretReferences | default([], true) | dump }}
           gitlabBaseUrl: https://gitlab.${DOMAIN}
           monitoringBaseUrl: https://monitoring.${DOMAIN}
           domain: ${DOMAIN}
