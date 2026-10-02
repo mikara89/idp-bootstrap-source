@@ -243,6 +243,8 @@ update-backstage-digest:
 golden-path-update:
   stage: gitops
   image: alpine:3.22
+  variables:
+    PYTHONDONTWRITEBYTECODE: "1"
   resource_group: golden-path-definitions
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $GOLDEN_PATH_SERVICE'
