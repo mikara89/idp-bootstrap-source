@@ -1,0 +1,1594 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>IDP Docker Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky chapter bar over a single reading column of "slides"; presenter mode shows one slide at a time.
+   Palette: cool mineral paper, deep slate ink, cobalt accent; three categorical hues encode the three Swarm managers. */
+:root{
+  --paper:#EDF1F0; --surface:#FFFFFF; --sunk:#E2E8E7; --ink:#10202A; --muted:#55666E; --line:#C9D4D5;
+  --accent:#2347C8; --accent-soft:#DDE5FB; --accent-ink:#FFFFFF;
+  --vm1:#7347C4; --vm2:#0B7C70; --vm3:#B0650A; --global:#55666E;
+  --vm1-soft:#EEE7FA; --vm2-soft:#DDF2EF; --vm3-soft:#F8ECDC;
+  --ok:#1A7C44; --ok-soft:#DCF1E4; --warn:#9C5E08; --warn-soft:#F7EBD6; --off:#7A898F; --off-soft:#E6EBEC;
+  --font-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:10px; --bar-h:56px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0E1519; --surface:#152027; --sunk:#1B2830; --ink:#E3EBED; --muted:#93A4AA; --line:#2A3A42;
+  --accent:#86A2FF; --accent-soft:#1F2D55; --accent-ink:#0E1519;
+  --vm1:#B194F2; --vm2:#45C3B3; --vm3:#E9A84A; --global:#93A4AA;
+  --vm1-soft:#2A2140; --vm2-soft:#14332F; --vm3-soft:#372914;
+  --ok:#5BCB8A; --ok-soft:#163323; --warn:#E6B05A; --warn-soft:#3A2B12; --off:#8796A0; --off-soft:#212D33;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#0E1519; --surface:#152027; --sunk:#1B2830; --ink:#E3EBED; --muted:#93A4AA; --line:#2A3A42;
+  --accent:#86A2FF; --accent-soft:#1F2D55; --accent-ink:#0E1519;
+  --vm1:#B194F2; --vm2:#45C3B3; --vm3:#E9A84A; --global:#93A4AA;
+  --vm1-soft:#2A2140; --vm2-soft:#14332F; --vm3-soft:#372914;
+  --ok:#5BCB8A; --ok-soft:#163323; --warn:#E6B05A; --warn-soft:#3A2B12; --off:#8796A0; --off-soft:#212D33;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:calc(var(--bar-h) + 16px)}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{animation:none!important; transition:none!important} }
+body{background:var(--paper); color:var(--ink); font-family:var(--font-body); font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
+code,.mono{font-family:var(--font-mono); font-size:.86em}
+a{color:var(--accent)}
+.ic{width:18px; height:18px; flex:none; display:inline-block; vertical-align:middle}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky; top:env(safe-area-inset-top,0px); z-index:20; background:color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+.bar-in{max-width:1180px; margin:0 auto; padding:0 16px; height:var(--bar-h); display:flex; align-items:center; gap:16px}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-weight:700; font-stretch:112%; letter-spacing:-.01em; white-space:nowrap}
+.brand svg{flex:none}
+.chapters{flex:1; min-width:0; display:flex; gap:2px; overflow-x:auto; scrollbar-width:none}
+.chapters::-webkit-scrollbar{display:none}
+.chapters a{flex:none; text-decoration:none; color:var(--muted); font-size:13px; padding:6px 10px; border-radius:999px; white-space:nowrap}
+.chapters a:hover{color:var(--ink); background:var(--sunk)}
+.chapters a.active{color:var(--ink); background:var(--surface); box-shadow:inset 0 0 0 1px var(--line)}
+.bar-actions{display:flex; gap:6px; flex:none}
+.btn{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--surface); padding:6px 12px; border-radius:8px; font-size:13px; cursor:pointer; white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45; cursor:default}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+.btn[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.icon-btn{width:34px; justify-content:center; padding:6px 0}
+
+/* ---------- page ---------- */
+main{max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:8px 80px}
+.slide{padding-block:56px; border-bottom:1px solid var(--line)}
+.slide:last-child{border-bottom:0}
+.sec-head{max-width:760px; display:grid; gap:10px; margin-bottom:28px}
+.eyebrow{margin:0; font-family:var(--font-mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.eyebrow b{color:var(--accent); font-weight:600}
+h1,h2,h3{font-family:var(--font-display); text-wrap:balance; margin:0; letter-spacing:-.02em}
+h1{font-size:clamp(34px,5.6vw,64px); line-height:1.02; font-weight:780; font-stretch:118%}
+h2{font-size:clamp(26px,3.4vw,38px); line-height:1.1; font-weight:720; font-stretch:112%}
+h3{font-size:18px; font-weight:680; font-stretch:105%; letter-spacing:-.01em}
+.lede{margin:0; color:var(--muted); font-size:17px; max-width:68ch}
+p{margin:0}
+.note{font-size:13px; color:var(--muted)}
+
+.chip{display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11.5px; padding:3px 8px; border-radius:999px; background:var(--sunk); color:var(--muted); white-space:nowrap}
+.chip.ok{background:var(--ok-soft); color:var(--ok)}
+.chip.warn{background:var(--warn-soft); color:var(--warn)}
+.chip.off{background:var(--off-soft); color:var(--off)}
+.chip.acc{background:var(--accent-soft); color:var(--accent)}
+.chip.vm1{background:var(--vm1-soft); color:var(--vm1)} .chip.vm2{background:var(--vm2-soft); color:var(--vm2)} .chip.vm3{background:var(--vm3-soft); color:var(--vm3)}
+.dot{width:8px; height:8px; border-radius:50%; background:currentColor; flex:none}
+
+.seg{display:inline-flex; flex-wrap:wrap; gap:4px; padding:4px; background:var(--sunk); border-radius:10px}
+.seg button{border:0; background:transparent; padding:7px 12px; border-radius:7px; font-size:13.5px; cursor:pointer; color:var(--muted); display:inline-flex; align-items:center; gap:7px}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgb(0 0 0 / .08), inset 0 0 0 1px var(--line)}
+.seg button .ic{width:16px; height:16px}
+
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px}
+
+/* ---------- hero ---------- */
+.hero{padding-top:48px}
+.hero-grid{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:40px; align-items:end}
+.hero h1 em{font-style:normal; color:var(--accent)}
+.hero .lede{font-size:18px; margin-top:18px}
+.status-line{display:flex; flex-wrap:wrap; gap:8px; margin-top:22px}
+.facts{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border:1px solid var(--line); border-radius:var(--r); background:var(--surface); overflow:hidden}
+.fact{padding:16px 18px; display:grid; gap:2px; border-right:1px solid var(--line); border-bottom:1px solid var(--line)}
+.fact:nth-child(2n){border-right:0}
+.fact:nth-last-child(-n+2){border-bottom:0}
+.fact b{font-family:var(--font-display); font-stretch:115%; font-size:30px; font-weight:740; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1}
+.fact span{font-size:13px; color:var(--muted)}
+.loop{margin-top:40px; display:grid; gap:12px}
+.loop-track{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+.loop-step{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:560; padding:8px 12px 8px 8px; border-radius:999px; background:var(--surface); border:1px solid var(--line); transition:background .3s, border-color .3s, color .3s}
+.loop-step .ic{width:28px; height:28px; padding:5px; border-radius:50%; background:var(--sunk); color:var(--ink); transition:background .3s, color .3s}
+.loop-step.lit{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+.loop-step.lit .ic{background:var(--accent-ink); color:var(--accent)}
+.loop-arrow{color:var(--muted); font-family:var(--font-mono)}
+.pillars{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin-top:40px}
+.pillar{display:grid; gap:8px; align-content:start; padding-top:14px; border-top:2px solid var(--ink)}
+.pillar .ph{display:flex; align-items:center; gap:10px}
+.pillar .ph .ic{width:34px; height:34px; padding:7px; border-radius:9px; background:var(--accent-soft); color:var(--accent)}
+.pillar p{font-size:14.5px; color:var(--muted)}
+.pillar .tools{font-family:var(--font-mono); font-size:12px; color:var(--ink)}
+.who{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:28px}
+.who a{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; align-items:center; text-decoration:none; color:inherit; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px}
+.who a:hover{border-color:var(--accent)}
+.who .av{grid-row:1 / span 2; width:44px; height:44px; border-radius:50%; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent)}
+.who .av .ic{width:22px; height:22px}
+.who b{font-size:15px}
+.who span{font-size:13px; color:var(--muted)}
+
+/* ---------- illustrated system map ---------- */
+.map-controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px}
+.map-wrap{display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:20px; align-items:start}
+.amap-scroll{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:var(--r)}
+.amap{display:block; width:100%; min-width:840px; height:auto}
+.amap .zone rect{fill:none; stroke-width:1.5; stroke-dasharray:6 5}
+.amap .zone.vm1 rect{stroke:var(--vm1)} .amap .zone.vm2 rect{stroke:var(--vm2)} .amap .zone.vm3 rect{stroke:var(--vm3)}
+.amap .tab rect{fill:var(--surface); stroke-width:1.2}
+.amap .tab text{font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; font-weight:600}
+.amap .tab.vm1 rect{stroke:var(--vm1)} .amap .tab.vm1 text{fill:var(--vm1)}
+.amap .tab.vm2 rect{stroke:var(--vm2)} .amap .tab.vm2 text{fill:var(--vm2)}
+.amap .tab.vm3 rect{stroke:var(--vm3)} .amap .tab.vm3 text{fill:var(--vm3)}
+.amap .cap{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; fill:var(--muted)}
+.amap .e{fill:none; stroke:var(--line); stroke-width:1.3; transition:stroke .2s, opacity .2s}
+.amap .e.dash{stroke-dasharray:5 4}
+.amap .e.on{stroke:var(--accent); stroke-width:2.2}
+.amap .ah-off{fill:var(--line)} .amap .ah-on{fill:var(--accent)}
+.amap .elbl{font-family:var(--font-mono); font-size:10.5px; fill:var(--accent); text-anchor:middle; paint-order:stroke; stroke:var(--surface); stroke-width:4px; stroke-linejoin:round}
+.amap .inode{cursor:pointer; transition:opacity .2s}
+.amap .inode .bg{fill:var(--surface); stroke:var(--line); stroke-width:1.5; transition:stroke .2s}
+.amap .inode use{color:var(--ink)}
+.amap .inode.vm1 .bg{fill:var(--vm1-soft); stroke:var(--vm1)} .amap .inode.vm1 use{color:var(--vm1)}
+.amap .inode.vm2 .bg{fill:var(--vm2-soft); stroke:var(--vm2)} .amap .inode.vm2 use{color:var(--vm2)}
+.amap .inode.vm3 .bg{fill:var(--vm3-soft); stroke:var(--vm3)} .amap .inode.vm3 use{color:var(--vm3)}
+.amap .inode.person .bg{fill:var(--accent-soft); stroke:var(--accent)} .amap .inode.person use{color:var(--accent)}
+.amap .inode.band .bg{fill:var(--sunk); stroke:var(--line)}
+.amap .inode text{paint-order:stroke; stroke:var(--surface); stroke-width:4px; stroke-linejoin:round}
+.amap .inode .l{font-family:var(--font-body); font-size:12.5px; font-weight:620; fill:var(--ink); text-anchor:middle}
+.amap .inode .s{font-family:var(--font-mono); font-size:10px; fill:var(--muted); text-anchor:middle}
+.amap .inode.band text{stroke:var(--sunk); text-anchor:start}
+.amap.dim .inode{opacity:.32}
+.amap.dim .inode.on{opacity:1}
+.amap .inode:hover .bg{stroke-width:2.5}
+.amap .inode.sel .bg, .amap .inode:focus-visible .bg{stroke:var(--accent); stroke-width:3}
+.amap .inode:focus{outline:none}
+.legend{display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:12.5px; color:var(--muted)}
+.legend span{display:inline-flex; align-items:center; gap:6px}
+.legend i{width:12px; height:12px; border-radius:50%; display:inline-block; border:1.5px solid}
+.legend .l1{background:var(--vm1-soft); border-color:var(--vm1)} .legend .l2{background:var(--vm2-soft); border-color:var(--vm2)} .legend .l3{background:var(--vm3-soft); border-color:var(--vm3)}
+.legend .lp{background:var(--accent-soft); border-color:var(--accent)} .legend .lx{background:var(--surface); border-color:var(--line)}
+.legend .ld{width:22px; height:0; border:0; border-top:1.5px dashed var(--muted); border-radius:0}
+.side{position:sticky; top:calc(var(--bar-h) + 20px); display:grid; gap:14px}
+.side .head{display:flex; gap:12px; align-items:center}
+.side .head .av{width:44px; height:44px; border-radius:50%; display:grid; place-items:center; background:var(--sunk); flex:none}
+.side .head .av .ic{width:22px; height:22px}
+.side h3{font-size:20px}
+.side .kind{font-family:var(--font-mono); font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.side ol{margin:0; padding-left:20px; display:grid; gap:7px; font-size:14px}
+.side ol li::marker{font-family:var(--font-mono); color:var(--muted); font-size:12px}
+.kv{display:grid; gap:10px; font-size:14px; margin:0}
+.kv dt{font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.kv dd{margin:2px 0 0}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.path{font-family:var(--font-mono); font-size:12px; word-break:break-all; color:var(--ink); background:var(--sunk); padding:6px 8px; border-radius:6px}
+
+/* ---------- workflows ---------- */
+.personas{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px}
+.pbtn{display:flex; align-items:center; gap:12px; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px 16px 10px 10px; cursor:pointer; min-width:0}
+.pbtn .av{width:42px; height:42px; border-radius:50%; display:grid; place-items:center; background:var(--sunk); color:var(--muted); flex:none}
+.pbtn .av .ic{width:21px; height:21px}
+.pbtn b{display:block; font-size:15px}
+.pbtn span.c{font-size:12.5px; color:var(--muted)}
+.pbtn[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+.pbtn[aria-pressed="true"] .av{background:var(--accent); color:var(--accent-ink)}
+.persona{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; padding:18px 20px; border-radius:var(--r); background:var(--surface); border:1px solid var(--line); margin-bottom:16px}
+.persona .goal{font-family:var(--font-display); font-size:20px; font-weight:680; font-stretch:108%; line-height:1.25; letter-spacing:-.01em}
+.persona .lbl{font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
+.chip.never{background:transparent; box-shadow:inset 0 0 0 1px var(--line); text-decoration:line-through; text-decoration-color:var(--muted)}
+.wf-pick{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px}
+.lanes-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r); background:var(--surface)}
+.lanes{position:relative; display:grid}
+.lane-bg{grid-column:1 / -1; border-bottom:1px solid var(--line); display:flex; align-items:center; padding-left:14px; min-height:118px}
+.lane-bg:last-of-type{border-bottom:0}
+.lane-bg.alt{background:color-mix(in srgb, var(--sunk) 55%, transparent)}
+.lane-bg span{display:flex; align-items:center; gap:8px; width:104px; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); line-height:1.3}
+.lane-bg.you span{color:var(--accent); font-weight:600}
+.lanes svg.wlinks{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; overflow:visible}
+.wl{fill:none; stroke:var(--muted); stroke-width:1.5; opacity:.7; transition:stroke .2s, opacity .2s}
+.wl.done{stroke:var(--accent); opacity:1; stroke-width:2}
+.wah{fill:var(--muted)} .wah-on{fill:var(--accent)}
+.wstep{position:relative; z-index:1; align-self:center; background:none; border:0; cursor:pointer; display:grid; justify-items:center; gap:7px; padding:14px 4px; text-align:center; transition:opacity .25s}
+.wic{position:relative; width:48px; height:48px; border-radius:50%; display:grid; place-items:center; background:var(--surface); border:1.5px solid var(--muted); color:var(--ink); transition:box-shadow .2s, background .2s}
+.wic .ic{width:22px; height:22px}
+.wstep.you .wic{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
+.wstep.auto .wic{background:var(--vm2-soft); border-color:var(--vm2); color:var(--vm2)}
+.wnum{position:absolute; top:-7px; right:-9px; font-family:var(--font-mono); font-size:10px; font-weight:600; background:var(--ink); color:var(--paper); border-radius:999px; padding:1px 6px; line-height:1.5}
+.wt{font-size:12.5px; font-weight:620; line-height:1.25; max-width:118px}
+.wstep:hover .wic{box-shadow:0 0 0 3px var(--line)}
+.wstep.sel .wic{box-shadow:0 0 0 3px var(--accent)}
+.lanes.playing .wstep{opacity:.35}
+.lanes.playing .wstep.past{opacity:.8}
+.lanes.playing .wstep.sel{opacity:1}
+.wdetail{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px; margin-top:14px}
+.wdetail .panel{display:grid; gap:8px; align-content:start}
+.wdetail .head{display:flex; align-items:center; gap:12px}
+.wdetail .head .wic{flex:none}
+.wdetail h3{font-size:19px}
+.wctrl{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.wctrl .count{font-family:var(--font-mono); font-size:12.5px; color:var(--muted); margin-left:auto}
+
+/* ---------- topology ---------- */
+.topo-head{display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px}
+.vms{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+.vm{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; display:flex; flex-direction:column}
+.vm-top{padding:16px 18px; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; border-bottom:1px solid var(--line)}
+.vm-top .srv{grid-row:1 / span 3; width:46px; height:46px; border-radius:12px; display:grid; place-items:center; background:var(--sunk); color:var(--muted)}
+.vm-top .srv .ic{width:24px; height:24px}
+.vm[data-vm="1"] .srv{background:var(--vm1-soft); color:var(--vm1)} .vm[data-vm="2"] .srv{background:var(--vm2-soft); color:var(--vm2)} .vm[data-vm="3"] .srv{background:var(--vm3-soft); color:var(--vm3)}
+.vm-top .vm-id{font-family:var(--font-mono); font-size:12.5px; font-weight:600}
+.vm[data-vm="1"] .vm-id{color:var(--vm1)} .vm[data-vm="2"] .vm-id{color:var(--vm2)} .vm[data-vm="3"] .vm-id{color:var(--vm3)}
+.vm[data-vm="1"]{border-top:3px solid var(--vm1)} .vm[data-vm="2"]{border-top:3px solid var(--vm2)} .vm[data-vm="3"]{border-top:3px solid var(--vm3)}
+.vm[data-vm="w"]{border-top:3px solid var(--off)}
+.vm-spec{font-family:var(--font-mono); font-size:12px; color:var(--muted)}
+.labels{display:flex; flex-wrap:wrap; gap:4px}
+.labels code{font-size:11px; background:var(--sunk); padding:2px 6px; border-radius:4px}
+.svc-list{list-style:none; margin:0; padding:8px 18px 14px; display:grid}
+.svc-list li{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px}
+.svc-list li:last-child{border-bottom:0}
+.svc-list li .ic{width:17px; height:17px; color:var(--muted)}
+.svc-list li span:last-child{font-family:var(--font-mono); font-size:11.5px; color:var(--muted); text-align:right}
+.globals{margin-top:16px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 16px; border:1px dashed var(--line); border-radius:var(--r); font-size:14px}
+.callout{margin-top:16px; padding:14px 16px; border-radius:var(--r); background:var(--warn-soft); color:var(--ink); font-size:14.5px; display:flex; gap:10px; align-items:flex-start}
+.callout b{color:var(--warn)}
+.callout .ic{color:var(--warn); margin-top:2px}
+
+/* ---------- providers ---------- */
+.prov{display:grid; grid-template-columns:minmax(0,1fr) 56px minmax(0,1.1fr) 56px minmax(0,1fr); align-items:stretch}
+.prov-col{display:grid; gap:10px; align-content:start}
+.prov-arrow{display:flex; align-items:center; justify-content:center; color:var(--muted); font-family:var(--font-mono); font-size:20px}
+.prov-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; display:grid; gap:6px; cursor:pointer; text-align:left}
+.prov-card[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+.prov-card .t{display:flex; justify-content:space-between; gap:8px; align-items:center; font-weight:650}
+.prov-card .t span:first-child{display:flex; align-items:center; gap:8px}
+.prov-card p{font-size:13.5px; color:var(--muted)}
+.contract{background:var(--ink); color:var(--paper); border-radius:var(--r); padding:18px; display:grid; gap:10px; align-content:start; font-family:var(--font-mono); font-size:12.5px; line-height:1.6; min-width:0}
+.contract .ct{font-family:var(--font-display); font-size:15px; font-weight:650; display:flex; align-items:center; gap:8px}
+.contract .k{color:color-mix(in srgb, var(--paper) 62%, var(--ink))}
+.contract pre{margin:0; white-space:pre-wrap; font:inherit}
+.consumer{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; display:grid; grid-template-columns:auto 1fr; gap:2px 12px; align-items:center; font-size:14px}
+.consumer .ic{grid-row:1 / span 2; width:22px; height:22px; color:var(--accent)}
+.consumer span{font-family:var(--font-mono); font-size:11.5px; color:var(--muted)}
+.prov-detail{margin-top:18px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+.rule{display:grid; gap:4px; font-size:14px; padding-top:12px; border-top:1px solid var(--line)}
+
+/* ---------- bootstrap ---------- */
+.boot{display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:20px; align-items:start}
+.boot-steps{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px}
+.boot-steps li button{width:100%; height:100%; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px 12px; cursor:pointer; display:grid; gap:6px; align-content:start}
+.boot-steps li button:hover{border-color:var(--muted)}
+.boot-steps .num{font-family:var(--font-mono); font-size:11px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; gap:6px}
+.boot-steps .num .ic{width:20px; height:20px}
+.boot-steps .lbl{font-size:13.5px; font-weight:600; line-height:1.25}
+.boot-steps li.done button{background:var(--sunk)}
+.boot-steps li.cur button{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); background:var(--surface)}
+.boot-steps li.gate button{border-style:dashed; border-color:var(--warn)}
+.boot-steps li.gate.cur button{border-style:solid; border-color:var(--accent)}
+.band{font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em}
+.band[data-b="infra"]{color:var(--muted)} .band[data-b="host"]{color:var(--vm2)} .band[data-b="boot"]{color:var(--vm1)} .band[data-b="gate"]{color:var(--warn)} .band[data-b="gitops"]{color:var(--accent)}
+.boot-steps .num .ic[data-b="infra"]{color:var(--muted)} .boot-steps .num .ic[data-b="host"]{color:var(--vm2)} .boot-steps .num .ic[data-b="boot"]{color:var(--vm1)} .boot-steps .num .ic[data-b="gate"]{color:var(--warn)} .boot-steps .num .ic[data-b="gitops"]{color:var(--accent)}
+.boot-detail{display:grid; gap:10px}
+.boot-detail h3{font-size:22px}
+.boot-detail .ctrl{display:flex; gap:8px; margin-top:6px}
+.progress{height:4px; background:var(--sunk); border-radius:4px; overflow:hidden}
+.progress i{display:block; height:100%; background:var(--accent); transition:width .3s}
+
+/* ---------- golden path ---------- */
+.gp-ctrl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px}
+.gp-ctrl .count{font-family:var(--font-mono); font-size:12.5px; color:var(--muted); margin-left:auto}
+.seq-scroll{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:var(--r)}
+.seq{min-width:980px; position:relative; padding:0 8px 12px}
+.seq-grid{display:grid; grid-template-columns:repeat(10,minmax(0,1fr))}
+.seq-heads{position:sticky; top:0; background:var(--surface); z-index:2; border-bottom:1px solid var(--line)}
+.seq-head{padding:14px 4px 10px; text-align:center; display:grid; gap:4px; justify-items:center}
+.seq-head .hi{width:36px; height:36px; border-radius:50%; display:grid; place-items:center; background:var(--sunk); color:var(--ink); transition:background .2s, color .2s}
+.seq-head .hi .ic{width:18px; height:18px}
+.seq-head b{font-size:12.5px; line-height:1.2}
+.seq-head span{font-family:var(--font-mono); font-size:10px; color:var(--muted)}
+.seq-head.lit .hi{background:var(--accent); color:var(--accent-ink)}
+.seq-head.lit b{color:var(--accent)}
+.seq-lanes{position:absolute; left:0; right:0; top:0; bottom:0; pointer-events:none}
+.seq-lanes div{border-right:1px dashed var(--line); margin-right:50%}
+.seq-rows{position:relative}
+.seq-row{display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); padding:5px 0; cursor:pointer; transition:opacity .25s}
+.seq-row .msg{position:relative; height:38px}
+.seq-row .msg .line{position:absolute; top:24px; height:0; border-top:1.6px solid var(--ink)}
+.seq-row.resp .msg .line{border-top-style:dashed; border-top-color:var(--muted)}
+.seq-row .msg .line::after{content:""; position:absolute; top:-5.5px; width:0; height:0; border-top:5px solid transparent; border-bottom:5px solid transparent}
+.seq-row .msg.r .line::after{right:-1px; border-left:8px solid var(--ink)}
+.seq-row .msg.l .line::after{left:-1px; border-right:8px solid var(--ink)}
+.seq-row.resp .msg.r .line::after{border-left-color:var(--muted)} .seq-row.resp .msg.l .line::after{border-right-color:var(--muted)}
+.seq-row .msg .txt{position:absolute; left:0; right:0; top:2px; text-align:center; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 6px}
+.seq-row .msg .txt i{font-style:normal; font-family:var(--font-mono); font-size:10.5px; color:var(--muted); margin-right:5px}
+.seq-row .self .loopbox{position:absolute; top:16px; left:50%; width:28px; height:16px; border:1.6px solid var(--ink); border-left:0; border-radius:0 6px 6px 0}
+.seq-row .self .txt{left:50%; right:auto; text-align:left; padding-left:34px; overflow:visible; top:15px}
+.seq.playing .seq-row{opacity:.35}
+.seq.playing .seq-row.past{opacity:.8}
+.seq.playing .seq-row.cur{opacity:1}
+.seq-row.cur .msg .line{border-top-color:var(--accent)}
+.seq-row.cur .msg.r .line::after{border-left-color:var(--accent)} .seq-row.cur .msg.l .line::after{border-right-color:var(--accent)}
+.seq-row.cur .self .loopbox{border-color:var(--accent)}
+.seq-row.cur .txt{color:var(--accent); font-weight:600}
+.gp-below{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:20px; margin-top:16px}
+.gp-caption{min-height:120px; display:grid; gap:8px; align-content:start}
+.gp-caption h3{font-size:19px}
+.boundary{display:grid; gap:10px}
+.boundary ul{margin:0; padding-left:18px; display:grid; gap:6px; font-size:14px}
+.exposure{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:4px}
+.exposure div{border:1px solid var(--line); border-radius:8px; padding:10px 12px; display:grid; gap:4px; font-size:13.5px; justify-items:start}
+
+/* ---------- access ---------- */
+.hops{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:18px 0}
+.hop{display:grid; justify-items:center; gap:6px; text-align:center; min-width:96px; max-width:150px}
+.hop .hi{width:52px; height:52px; border-radius:50%; display:grid; place-items:center; background:var(--surface); border:1.5px solid var(--line); color:var(--ink)}
+.hop .hi .ic{width:24px; height:24px}
+.hop b{font-size:13.5px; line-height:1.2}
+.hop span{font-family:var(--font-mono); font-size:10.5px; color:var(--muted)}
+.hop.key .hi{border-color:var(--accent); background:var(--accent-soft); color:var(--accent)}
+.hop-arrow{color:var(--muted); font-family:var(--font-mono); font-size:16px; padding-bottom:34px}
+.access-grid{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:20px}
+table{border-collapse:collapse; width:100%; font-size:14px}
+th,td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-family:var(--font-mono); font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.tbl{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:var(--r)}
+.tbl table tr:last-child td{border-bottom:0}
+
+/* ---------- network matrix ---------- */
+.matrix th.net button{border:0; background:transparent; cursor:pointer; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; padding:4px 6px; border-radius:6px}
+.matrix th.net button:hover{background:var(--sunk); color:var(--ink)}
+.matrix th.net.sel button{background:var(--accent); color:var(--accent-ink)}
+.matrix td.c{text-align:center}
+.matrix td.c i{display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--ink)}
+.matrix td.c.sel{background:var(--accent-soft)}
+.matrix td.c.sel i{background:var(--accent)}
+.matrix tr.dim td{opacity:.35}
+.matrix td.svc{white-space:nowrap}
+.matrix td.svc .ic{width:16px; height:16px; margin-right:8px}
+.matrix td.svc[data-vm="1"] .ic{color:var(--vm1)} .matrix td.svc[data-vm="2"] .ic{color:var(--vm2)} .matrix td.svc[data-vm="3"] .ic{color:var(--vm3)} .matrix td.svc[data-vm="g"] .ic{color:var(--muted)}
+.net-note{margin-top:14px; min-height:48px; font-size:14.5px; max-width:80ch}
+
+/* ---------- observability ---------- */
+.signals{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+.signal{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px; display:grid; gap:12px; align-content:start}
+.signal .sh{display:flex; align-items:center; gap:10px}
+.signal .sh .ic{width:34px; height:34px; padding:7px; border-radius:9px; background:var(--accent-soft); color:var(--accent)}
+.flowcol{display:grid; gap:6px}
+.flowcol .f{font-size:13.5px; padding:7px 10px; border-radius:6px; background:var(--sunk); display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px}
+.flowcol .f .ic{width:16px; height:16px; color:var(--muted)}
+.flowcol .f span{font-family:var(--font-mono); font-size:11px; color:var(--muted)}
+.flowcol .down{text-align:center; color:var(--muted); font-family:var(--font-mono); font-size:12px; line-height:1}
+.flowcol .f.dest{background:var(--accent-soft)}
+.flowcol .f.dest .ic{color:var(--accent)}
+
+/* ---------- recovery ---------- */
+.rec{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 260px; gap:16px}
+.rec h3{display:flex; align-items:center; gap:10px; margin-bottom:12px}
+.rec h3 .ic{width:30px; height:30px; padding:6px; border-radius:8px; background:var(--accent-soft); color:var(--accent)}
+.targets{display:grid; gap:12px; align-content:start}
+.target{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; display:grid; gap:2px}
+.target b{font-family:var(--font-display); font-stretch:115%; font-size:32px; font-weight:740; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.target span{font-size:13px; color:var(--muted)}
+.steps{list-style:none; margin:0; padding:0; display:grid; gap:8px; counter-reset:s}
+.steps li{counter-increment:s; display:grid; grid-template-columns:28px 1fr; gap:10px; align-items:start; font-size:14px}
+.steps li::before{content:counter(s); font-family:var(--font-mono); font-size:12px; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; background:var(--sunk); color:var(--muted)}
+.steps li b{display:block; font-size:14.5px}
+
+/* ---------- release ---------- */
+.rel{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px}
+.lane{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px; display:grid; gap:12px; align-content:start}
+.lane-h{display:flex; justify-content:space-between; gap:10px; align-items:center}
+.stage{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:13.5px}
+.stage .s{padding:6px 10px; border-radius:6px; background:var(--sunk); transition:background .2s, color .2s}
+.stage .s.on{background:var(--accent); color:var(--accent-ink)}
+.stage .ar{color:var(--muted); font-family:var(--font-mono)}
+.domains{display:flex; flex-wrap:wrap; gap:6px}
+.domains .chip{font-size:12px; padding:5px 10px}
+.domains .chip.on{background:var(--accent); color:var(--accent-ink)}
+.change-pick{margin-bottom:16px}
+.verdict{margin-top:16px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px}
+.verdict .panel{display:grid; gap:6px}
+
+/* ---------- roadmap ---------- */
+.road{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px}
+.road li{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px; display:grid; gap:6px; align-content:start; cursor:pointer}
+.road li[aria-expanded="true"]{border-color:var(--accent)}
+.road .ph{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.road .ph b{font-family:var(--font-display); font-stretch:115%; font-size:22px; font-weight:740; font-variant-numeric:tabular-nums}
+.road .goal{font-weight:620; font-size:14.5px; line-height:1.3}
+.road .done-when{font-size:13px; color:var(--muted); display:none}
+.road li[aria-expanded="true"] .done-when{display:block}
+.road-legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; align-items:center}
+
+/* ---------- ADRs ---------- */
+.adr-ctrl{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px}
+.adr-ctrl input{flex:1; min-width:200px; max-width:340px; border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:8px 12px; font:inherit; font-size:14px; color:var(--ink)}
+.adr-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
+.adr{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:grid; grid-template-columns:52px minmax(0,1fr) auto; gap:4px 12px; align-items:start}
+.adr .no{font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--muted); padding-top:1px}
+.adr .ti{font-weight:620; font-size:14.5px; line-height:1.3}
+.adr .nt{grid-column:2 / 4; font-size:13px; color:var(--muted)}
+.adr.sup .ti{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--line)}
+.adr-empty{padding:20px; color:var(--muted)}
+.sr{position:absolute; left:-9999px}
+
+/* ---------- portability ---------- */
+.port{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:20px}
+.map-rows{display:grid; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.map-rows div{display:grid; grid-template-columns:1fr 24px 1fr; gap:8px; padding:8px 14px; border-bottom:1px solid var(--line); font-size:14px; align-items:center}
+.map-rows div:last-child{border-bottom:0}
+.map-rows div span:nth-child(2){color:var(--muted); font-family:var(--font-mono); text-align:center}
+.map-rows div span:nth-child(3){color:var(--muted)}
+.deferred{display:flex; flex-wrap:wrap; gap:6px}
+.closing{margin-top:40px; padding:28px; border-radius:var(--r); background:var(--ink); color:var(--paper); display:grid; gap:10px}
+.closing h3{font-size:24px; font-stretch:112%}
+.closing p{color:color-mix(in srgb, var(--paper) 75%, var(--ink)); max-width:72ch}
+
+/* ---------- presenter mode ---------- */
+.pbar{position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--surface); border-top:1px solid var(--line); padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.pbar-in{max-width:1180px; margin:0 auto; display:flex; align-items:center; gap:12px}
+.pbar .count{font-family:var(--font-mono); font-size:12.5px; color:var(--muted); white-space:nowrap}
+.pbar .progress{flex:1}
+.pbar .hint{font-size:12px; color:var(--muted); white-space:nowrap}
+body.present .slide{display:none; border-bottom:0; padding-block:36px 96px}
+body.present .slide.current{display:block; animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:.4; transform:translateY(6px)} to{opacity:1; transform:none}}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1020px){
+  .map-wrap,.boot,.access-grid,.gp-below,.port,.wdetail{grid-template-columns:minmax(0,1fr)}
+  .side{position:static}
+  .rec{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .rec .targets{grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr))}
+  .road{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pillars{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .persona{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .persona > div:first-child{grid-column:1 / -1}
+}
+@media (max-width: 820px){
+  .hero-grid,.vms,.signals,.rel,.verdict,.prov-detail,.adr-list,.who{grid-template-columns:minmax(0,1fr)}
+  .prov{grid-template-columns:minmax(0,1fr)}
+  .prov-arrow{transform:rotate(90deg); height:36px}
+  .road{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rec{grid-template-columns:minmax(0,1fr)}
+  .chapters{display:none}
+  .bar-in{justify-content:space-between}
+}
+@media (max-width: 520px){
+  .pillars,.road,.exposure,.persona{grid-template-columns:minmax(0,1fr)}
+  .fact b{font-size:24px}
+  .slide{padding-block:40px}
+  .btn .lbl{display:none}
+  .pbar .hint{display:none}
+  .hop-arrow{display:none}
+}
+</style>
+
+<!-- Icon set: generic 24px stroke icons, coloured with currentColor -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="i-user" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></g></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3c2.2.6 3.5 2.6 3.5 5.7"/></g></symbol>
+<symbol id="i-laptop" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="11" rx="1.5"/><path d="M2 19h20"/><path d="M10 7.5l-2 2 2 2M14 7.5l2 2-2 2"/></g></symbol>
+<symbol id="i-tool" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3.5 17.2a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.2-.4-.4-2.2z"/></g></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></g></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 8.5a4.5 4.5 0 0 1-.5 9.5z"/><path d="M9 14h6"/></g></symbol>
+<symbol id="i-lb" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 12h10M7 11l10-5M7 13l10 5"/></g></symbol>
+<symbol id="i-route" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20V10L12 4l8.5 6v10"/><path d="M9 20v-5.5a3 3 0 0 1 6 0V20"/><path d="M2 20h20"/></g></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></g></symbol>
+<symbol id="i-gate" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16.2v.1"/></g></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M16 7l3 3M13.5 9.5l2 2"/></g></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+<symbol id="i-portal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></g></symbol>
+<symbol id="i-git" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.2v9.6M18 10.2c0 4-6 3.5-11 7"/></g></symbol>
+<symbol id="i-pr" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2v7.6M18 15.8V9a3 3 0 0 0-3-3h-4"/><path d="M13 3.5L10.5 6 13 8.5"/></g></symbol>
+<symbol id="i-merge" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 7.2v9.6"/><path d="M6 7.5c0 3 3 4.5 9.8 4.5"/></g></symbol>
+<symbol id="i-package" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l8 4.4v9.6l-8 4.4-8-4.4V7.2z"/><path d="M4 7.2l8 4.4 8-4.4M12 11.6v9.6"/></g></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.8M12 18.7v2.8M2.5 12h2.8M18.7 12h2.8M5.3 5.3l2 2M16.7 16.7l2 2M5.3 18.7l2-2M16.7 7.3l2-2"/><circle cx="12" cy="12" r="6.6"/></g></symbol>
+<symbol id="i-filecode" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5"/><path d="M10 12l-2 2 2 2M14 12l2 2-2 2"/></g></symbol>
+<symbol id="i-sync" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></g></symbol>
+<symbol id="i-swarm" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3l3.5 2v4L7 11 3.5 9V5z"/><path d="M17 3l3.5 2v4L17 11l-3.5-2V5z"/><path d="M12 12.5l3.5 2v4L12 20.5l-3.5-2v-4z"/></g></symbol>
+<symbol id="i-db" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></g></symbol>
+<symbol id="i-cubes" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="12.5" width="7.5" height="7.5" rx="1.2"/><rect x="13" y="12.5" width="7.5" height="7.5" rx="1.2"/><rect x="8.25" y="3.5" width="7.5" height="7.5" rx="1.2"/></g></symbol>
+<symbol id="i-metrics" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></g></symbol>
+<symbol id="i-logs" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="2.6"/></g></symbol>
+<symbol id="i-dashboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a9 9 0 1 1 17 0"/><path d="M12 13.5l4-4.5"/><circle cx="12" cy="14" r="1.4"/><path d="M3.5 20h17"/></g></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></g></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/></g></symbol>
+<symbol id="i-bucket" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.5" rx="8" ry="3"/><path d="M4 6.5l1.8 12c.2 1.4 2.9 2.5 6.2 2.5s6-1.1 6.2-2.5L20 6.5"/></g></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/></g></symbol>
+<symbol id="i-listcheck" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 6h10M11 12h10M11 18h10"/><path d="M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></g></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></g></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="7" rx="1.5"/><rect x="3.5" y="13" width="17" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01" stroke-width="2.6"/><path d="M11 7.5h6M11 16.5h6"/></g></symbol>
+<symbol id="i-form" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></g></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></g></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9"/></g></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z"/></g></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 11l2 2 4-4M8.5 17h7"/></g></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></g></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></g></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2.5z"/><path d="M4 19.5A2 2 0 0 0 6 21h14v-4"/><path d="M9 7.5h7"/></g></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 2.5h5"/></g></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5v-3a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2"/></g></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></g></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></g></symbol>
+<symbol id="i-network" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></g></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.3v.1"/></g></symbol>
+</defs>
+</svg>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--vm1)"/><rect x="13" y="1" width="8" height="8" rx="2" fill="var(--vm2)"/><rect x="7" y="13" width="8" height="8" rx="2" fill="var(--vm3)"/></svg>
+      IDP Docker Stack
+    </div>
+    <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
+    <div class="bar-actions">
+      <button class="btn icon-btn" id="themeBtn" title="Theme: system" aria-label="Switch theme">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg>
+      </button>
+      <button class="btn primary" id="presentBtn" aria-pressed="false" title="Presenter mode (P)">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg><span class="lbl">Present</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- 01 -->
+<section class="slide hero" id="overview" data-title="Overview">
+  <div class="hero-grid">
+    <div>
+      <p class="eyebrow"><b>Internal Developer Platform</b> · Docker Swarm · self-hosted</p>
+      <h1 style="margin-top:14px">A sovereign developer platform on <em>three Swarm managers</em>.</h1>
+      <p class="lede">Terraform provisions the machines, Ansible bootstraps the Swarm, and SwarmCD keeps the platform in sync with GitLab. Developers create and ship services from Backstage without touching servers, SSH keys or Docker credentials.</p>
+      <div class="status-line">
+        <span class="chip acc"><span class="dot"></span>Repository state at a24b0bd</span>
+        <span class="chip warn"><span class="dot"></span>Diagrams show repository intent, not verified live state</span>
+      </div>
+    </div>
+    <div class="facts" aria-label="Key figures">
+      <div class="fact"><b>3</b><span>Swarm managers, no workers (v2 target)</span></div>
+      <div class="fact"><b>3</b><span>compute providers behind one contract</span></div>
+      <div class="fact"><b>≤ 24 h</b><span>RPO target, until a restore drill proves it</span></div>
+      <div class="fact"><b>≤ 4 h</b><span>RTO target, until a restore drill proves it</span></div>
+    </div>
+  </div>
+
+  <div class="loop">
+    <p class="eyebrow">The delivery loop</p>
+    <div class="loop-track" id="loopTrack"></div>
+  </div>
+
+  <div class="pillars" id="pillars"></div>
+
+  <div class="who" id="who"></div>
+</section>
+
+<!-- 02 -->
+<section class="slide" id="map" data-title="Architecture">
+  <header class="sec-head">
+    <p class="eyebrow"><b>02</b> · System architecture</p>
+    <h2>Every component, where it runs, and how they connect</h2>
+    <p class="lede">Dashed outlines are the three Swarm managers. Pick a flow to trace it, or click any component to see what it does and every connection it has.</p>
+  </header>
+  <div class="map-controls">
+    <div class="seg" id="flowSeg" role="group" aria-label="Flows"></div>
+  </div>
+  <div class="map-wrap">
+    <div>
+      <div class="amap-scroll"><svg class="amap" id="amap" viewBox="0 0 1140 760" role="img" aria-label="Architecture diagram of the IDP across three Swarm managers"></svg></div>
+      <div class="legend">
+        <span><i class="l1"></i>VM-01 GitLab</span>
+        <span><i class="l2"></i>VM-02 Platform</span>
+        <span><i class="l3"></i>VM-03 Apps</span>
+        <span><i class="lp"></i>People</span>
+        <span><i class="lx"></i>Outside the Swarm</span>
+        <span><i class="ld"></i>Poll, pull or lookup</span>
+      </div>
+    </div>
+    <aside class="panel side" id="mapSide" aria-live="polite"></aside>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="slide" id="workflows" data-title="Workflows">
+  <header class="sec-head">
+    <p class="eyebrow"><b>03</b> · Workflows by role</p>
+    <h2>What each person actually does</h2>
+    <p class="lede">The same platform from three sides. Each lane shows who acts at each step, so you can see where work moves from people to automation.</p>
+  </header>
+  <div class="personas" id="personas" role="group" aria-label="Role"></div>
+  <div class="persona" id="persona"></div>
+  <div class="wf-pick"><div class="seg" id="wfSeg" role="group" aria-label="Workflow"></div></div>
+  <div class="lanes-scroll"><div class="lanes" id="lanes"></div></div>
+  <div class="wdetail">
+    <div class="panel" id="wStep" aria-live="polite"></div>
+    <div class="panel">
+      <div class="wctrl">
+        <button class="btn primary" id="wPlay" type="button"><span id="wPlayLbl">Play</span></button>
+        <button class="btn" id="wPrev" type="button" aria-label="Previous step">←</button>
+        <button class="btn" id="wNext" type="button" aria-label="Next step">→</button>
+        <span class="count" id="wCount"></span>
+      </div>
+      <p class="eyebrow" style="margin-top:6px">Outcome</p>
+      <p style="font-size:14.5px" id="wOutcome"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="slide" id="topology" data-title="Topology">
+  <header class="sec-head">
+    <p class="eyebrow"><b>04</b> · Hosting and placement</p>
+    <h2>Three machines, each with one job</h2>
+    <p class="lede">Workload labels pin every service to a node. Compare the repository's v2 target with the five-node baseline that was last deployed.</p>
+  </header>
+  <div class="topo-head">
+    <div class="seg" id="topoSeg" role="group" aria-label="Topology view">
+      <button type="button" aria-pressed="true" data-v="v2">v2 target (repository)</button>
+      <button type="button" aria-pressed="false" data-v="base">Deployed baseline, May 2026</button>
+    </div>
+    <span class="note" id="topoNote"></span>
+  </div>
+  <div class="vms" id="vms"></div>
+  <div class="globals" id="globals"></div>
+  <div class="callout"><svg class="ic"><use href="#i-warn"/></svg><span><b>Quorum is not HA.</b> Three managers keep the Swarm control plane alive through one node loss. GitLab, PostgreSQL, Keycloak, Traefik, Backstage and observability still run as single instances that are recovered, not failed over.</span></div>
+</section>
+
+<!-- 05 -->
+<section class="slide" id="providers" data-title="Providers">
+  <header class="sec-head">
+    <p class="eyebrow"><b>05</b> · Infrastructure contract</p>
+    <h2>Pick a provider once. Everything downstream stays the same.</h2>
+    <p class="lede">Each provider has its own Terraform root and emits the same normalized <code>infrastructure</code> output. DNS, inventory and bootstrap never branch on provider name.</p>
+  </header>
+  <div class="prov">
+    <div class="prov-col" id="provCards" role="group" aria-label="Provider"></div>
+    <div class="prov-arrow" aria-hidden="true">→</div>
+    <div class="contract" id="contract"></div>
+    <div class="prov-arrow" aria-hidden="true">→</div>
+    <div class="prov-col">
+      <div class="consumer"><svg class="ic"><use href="#i-cloud"/></svg><b>Cloudflare DNS</b><span>reads ingress.public_ipv4</span></div>
+      <div class="consumer"><svg class="ic"><use href="#i-listcheck"/></svg><b>Ansible inventory</b><span>generate-ansible-inventory.py</span></div>
+      <div class="consumer"><svg class="ic"><use href="#i-server"/></svg><b>Bootstrap inputs</b><span>nodes, storage, jumpbox</span></div>
+      <div class="consumer"><svg class="ic"><use href="#i-terminal"/></svg><b>Operator jumpbox</b><span>jumpbox.public_endpoint</span></div>
+    </div>
+  </div>
+  <div class="prov-detail">
+    <div class="rule"><b>No runtime selector</b><span class="note">There is no <code>infrastructure_provider</code> variable, no cross-provider Swarm and no automatic failover. The operator chooses a deployment root before plan.</span></div>
+    <div class="rule"><b>Backups are a separate choice</b><span class="note">Any compute provider can back up to Hetzner or OVH Object Storage through the same generic S3 inputs.</span></div>
+    <div class="rule"><b>State stays sovereign</b><span class="note">Terraform state lives in an S3-compatible bucket with lockfile locking, created outside the root's own lifecycle (ADR 0013).</span></div>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="slide" id="bootstrap" data-title="Bootstrap">
+  <header class="sec-head">
+    <p class="eyebrow"><b>06</b> · Bootstrap and GitOps handoff</p>
+    <h2>Why the order matters</h2>
+    <p class="lede">SwarmCD reads from GitLab, so GitLab cannot be managed by SwarmCD on day one. Ansible builds everything SwarmCD depends on, proves the images exist, and only then hands over.</p>
+  </header>
+  <div class="boot">
+    <ol class="boot-steps" id="bootSteps"></ol>
+    <aside class="panel boot-detail" id="bootDetail" aria-live="polite"></aside>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="slide" id="golden-path" data-title="Golden path">
+  <header class="sec-head">
+    <p class="eyebrow"><b>07</b> · Golden-path service delivery</p>
+    <h2>From template to running service, with no infrastructure access</h2>
+    <p class="lede">The service pipeline only produces an image and asks for promotion. A trusted pipeline in the platform repository decides what gets deployed and how.</p>
+  </header>
+  <div class="gp-ctrl">
+    <button class="btn primary" id="gpPlay" type="button"><span id="gpPlayLbl">Play</span></button>
+    <button class="btn" id="gpPrev" type="button" aria-label="Previous step">← Prev</button>
+    <button class="btn" id="gpNext" type="button" aria-label="Next step">Next →</button>
+    <button class="btn" id="gpReset" type="button">Show all</button>
+    <span class="count" id="gpCount">13 messages</span>
+  </div>
+  <div class="seq-scroll">
+    <div class="seq" id="seq">
+      <div class="seq-grid seq-heads" id="seqHeads"></div>
+      <div class="seq-rows" id="seqRows"></div>
+    </div>
+  </div>
+  <div class="gp-below">
+    <div class="panel gp-caption" id="gpCaption" aria-live="polite"></div>
+    <div class="panel boundary">
+      <h3>What the renderer owns</h3>
+      <ul>
+        <li>Placement on <code>workload=apps</code>, network attachments, labels and resource profiles (small, medium)</li>
+        <li>The allowed exposure modes and approved secret references</li>
+        <li>Metrics discovery, committed next to the stack</li>
+      </ul>
+      <div class="exposure">
+        <div><span class="chip ok">internal</span>No Traefik route. Reachable on <code>apps_net</code> only.</div>
+        <div><span class="chip acc">authenticated-web</span>Public HTTPS behind SSO, with a Traefik readiness check.</div>
+      </div>
+      <p class="note">Rollback is a Git revert to an earlier digest. Offboarding deletes the definition and regenerates the stack.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="slide" id="access" data-title="Access">
+  <header class="sec-head">
+    <p class="eyebrow"><b>08</b> · Ingress, identity and access</p>
+    <h2>One front door, several ways through it</h2>
+    <p class="lede">Traefik terminates TLS for everything. What happens next depends on who is calling: a person in a browser, GitLab's own login, or a machine with a token.</p>
+  </header>
+  <div class="seg" id="accessSeg" role="group" aria-label="Caller"></div>
+  <div class="hops" id="hops"></div>
+  <div class="access-grid">
+    <div class="panel" id="accessNote" aria-live="polite"></div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Access axis</th><th>Question it answers</th></tr></thead>
+        <tbody>
+          <tr><td><b>Visibility</b></td><td>Who can discover catalog metadata or source?</td></tr>
+          <tr><td><b>Authentication</b></td><td>Which identity system verifies the caller?</td></tr>
+          <tr><td><b>Reachability</b></td><td>Which network can connect to the endpoint?</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="padding:10px 12px 14px">A private hostname or an SSO session alone is never treated as network isolation.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="slide" id="network" data-title="Networks">
+  <header class="sec-head">
+    <p class="eyebrow"><b>09</b> · Network segmentation</p>
+    <h2>Overlay membership, service by service</h2>
+    <p class="lede">Attachments as declared in each stack file. Select a network to see who shares it. An overlay attachment is not an internet publication and not a human permission.</p>
+  </header>
+  <div class="tbl"><table class="matrix" id="matrix"></table></div>
+  <p class="net-note" id="netNote"></p>
+</section>
+
+<!-- 10 -->
+<section class="slide" id="observability" data-title="Observability">
+  <header class="sec-head">
+    <p class="eyebrow"><b>10</b> · Observability</p>
+    <h2>Services inherit telemetry by being deployed</h2>
+    <p class="lede">A service's metrics path is part of its intent and is rendered into Prometheus file discovery. Logs are collected from every node. Neither Prometheus nor Alloy mounts the Docker socket.</p>
+  </header>
+  <div class="signals" id="signals"></div>
+  <p class="note" style="margin-top:14px">Edge protection: CrowdSec parses Traefik access logs in observe-first mode. No bouncer middleware enforces its decisions yet.</p>
+</section>
+
+<!-- 11 -->
+<section class="slide" id="recovery" data-title="Recovery">
+  <header class="sec-head">
+    <p class="eyebrow"><b>11</b> · Backup and disaster recovery</p>
+    <h2>Encrypted, node-local, application-consistent</h2>
+    <p class="lede">Systemd timers on the nodes that own the data produce backups, encrypt them with age and upload them to an independent S3-compatible bucket. A passing repository check is not a restore.</p>
+  </header>
+  <div class="rec">
+    <div class="panel">
+      <h3><svg class="ic"><use href="#i-archive"/></svg>Backup</h3>
+      <ol class="steps">
+        <li><span><b>GitLab backup artifact</b><span class="note">VM-01 timer, dedicated GitLab volume</span></span></li>
+        <li><span><b>Platform database dump</b><span class="note">VM-02 timer, Backstage and Keycloak data</span></span></li>
+        <li><span><b>Platform and observability data</b><span class="note">volume data on the platform node</span></span></li>
+        <li><span><b>Encrypt and upload</b><span class="note">age-encrypted, retention applied, S3 bucket</span></span></li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3><svg class="ic"><use href="#i-undo"/></svg>Restore</h3>
+      <ol class="steps">
+        <li><span><b>Restore preflight</b><span class="note">drill or incident, recovery secret inventory</span></span></li>
+        <li><span><b>Restore GitLab</b><span class="note">repositories, registry, runtime branch</span></span></li>
+        <li><span><b>Restore platform database</b><span class="note">Backstage and Keycloak state</span></span></li>
+        <li><span><b>Restore runtime secrets and configs</b><span class="note">then let SwarmCD reconcile</span></span></li>
+        <li><span><b>Verify services and data</b><span class="note">record RPO and RTO evidence</span></span></li>
+      </ol>
+    </div>
+    <div class="targets">
+      <div class="target"><b>≤ 24 h</b><span>Recovery point objective (target)</span></div>
+      <div class="target"><b>≤ 4 h</b><span>Recovery time objective (target)</span></div>
+      <p class="note">Both stay targets until a live restore drill proves them. See the restore-drill and IDP disaster-recovery runbooks.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" id="release" data-title="Release">
+  <header class="sec-head">
+    <p class="eyebrow"><b>12</b> · Validation and release</p>
+    <h2>Merging to GitHub does not change the runtime</h2>
+    <p class="lede">GitHub validates source. GitLab holds the runtime branch that SwarmCD watches. Choose a kind of change to see which checks run and how it reaches production.</p>
+  </header>
+  <div class="change-pick seg" id="changeSeg" role="group" aria-label="Kind of change"></div>
+  <div class="rel">
+    <div class="lane">
+      <div class="lane-h"><h3>Source boundary</h3><span class="chip">GitHub</span></div>
+      <div class="stage" id="srcStage"></div>
+      <p class="eyebrow">Validation domains</p>
+      <div class="domains" id="domains"></div>
+    </div>
+    <div class="lane">
+      <div class="lane-h"><h3>Runtime boundary</h3><span class="chip">GitLab</span></div>
+      <div class="stage" id="rtStage"></div>
+      <p class="note">SwarmCD polls <code>platform_repo_branch</code>, default <code>sovereign-idp-vertical-slices</code>, and its <code>compose_file</code>. Inspect the effective values rather than assuming GitHub <code>main</code>.</p>
+    </div>
+  </div>
+  <div class="verdict">
+    <div class="panel" id="vSource"></div>
+    <div class="panel" id="vRuntime"></div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" id="roadmap" data-title="Roadmap">
+  <header class="sec-head">
+    <p class="eyebrow"><b>13</b> · v2 delivery phases</p>
+    <h2>Built in vertical slices</h2>
+    <p class="lede">Each phase ends with a concrete "done when". Repository completion is not live proof: phases are commissioned on real infrastructure only through approved applies.</p>
+  </header>
+  <div class="road-legend">
+    <span class="chip ok"><span class="dot"></span>Repository complete</span>
+    <span class="chip warn"><span class="dot"></span>In progress</span>
+    <span class="note">Select a phase for its acceptance criterion.</span>
+  </div>
+  <ol class="road" id="road"></ol>
+</section>
+
+<!-- 14 -->
+<section class="slide" id="decisions" data-title="Decisions">
+  <header class="sec-head">
+    <p class="eyebrow"><b>14</b> · Architecture decision records</p>
+    <h2>Why the platform is shaped this way</h2>
+    <p class="lede">Twenty-five records in <code>docs/adr/</code>. Superseded decisions stay in history and point to their replacement.</p>
+  </header>
+  <div class="adr-ctrl">
+    <div class="seg" id="adrSeg" role="group" aria-label="Status filter"></div>
+    <label class="sr" for="adrQ">Search decisions</label>
+    <input id="adrQ" type="search" placeholder="Search decisions, e.g. identity, backup">
+  </div>
+  <div class="adr-list" id="adrList"></div>
+</section>
+
+<!-- 15 -->
+<section class="slide" id="portability" data-title="Next">
+  <header class="sec-head">
+    <p class="eyebrow"><b>15</b> · Portability and scope</p>
+    <h2>Small now, with a clear path to Kubernetes</h2>
+    <p class="lede">Every Swarm primitive used here has a direct Kubernetes counterpart. Terraform keeps provisioning infrastructure either way.</p>
+  </header>
+  <div class="port">
+    <div class="map-rows" id="portRows"></div>
+    <div style="display:grid; gap:14px; align-content:start">
+      <h3>Deliberately out of the first v2 MVP</h3>
+      <div class="deferred">
+        <span class="chip off">Kubernetes migration</span><span class="chip off">Argo CD / Flux</span><span class="chip off">Distributed storage</span>
+        <span class="chip off">HA PostgreSQL, GitLab, identity</span><span class="chip off">Multi-region active/active</span><span class="chip off">NAT gateway</span>
+        <span class="chip off">Vault</span><span class="chip off">Tempo</span><span class="chip off">Separate monitoring cluster</span>
+      </div>
+      <h3 style="margin-top:10px">Proposed next boundary</h3>
+      <p class="note">A developer VPN with a private ingress listener for designated HTTPS routes. It must never expose Swarm management ports, Docker sockets, database networks or raw overlay addresses. Hostname, cookie scope, device enrolment and recovery need decisions first.</p>
+    </div>
+  </div>
+  <div class="closing">
+    <h3>Self-hosted end to end, recoverable by design</h3>
+    <p>Source, CI, registry, identity, portal, telemetry and backups all run on infrastructure you choose. The remaining work is proof: live commissioning, a timed restore drill and the first service shipped through the golden path.</p>
+  </div>
+</section>
+
+</main>
+
+<div class="pbar" id="pbar" hidden>
+  <div class="pbar-in">
+    <button class="btn" id="pPrev" type="button" aria-label="Previous slide">←</button>
+    <span class="count" id="pCount">1 / 15</span>
+    <div class="progress"><i id="pProg" style="width:0"></i></div>
+    <span class="hint">← → to move · Esc to exit</span>
+    <button class="btn" id="pNext" type="button" aria-label="Next slide">→</button>
+    <button class="btn" id="pExit" type="button">Exit</button>
+  </div>
+</div>
+
+<script>
+(function(){
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const h = (tag, attrs={}, html='') => { const e=document.createElement(tag); for(const k in attrs){ if(k==='class') e.className=attrs[k]; else if(k==='style') e.style.cssText=attrs[k]; else e.setAttribute(k, attrs[k]); } if(html) e.innerHTML=html; return e; };
+const ic = (name, extra='') => `<svg class="ic" ${extra} aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const store = { get(k){ try{return localStorage.getItem(k)}catch(e){return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch(e){} } };
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const redrawers = [];
+const redrawAll = () => requestAnimationFrame(()=>redrawers.forEach(f=>f()));
+
+/* ---------------- theme ---------------- */
+const themes=['system','light','dark'];
+let ti = Math.max(0, themes.indexOf(store.get('idp-theme')||'system'));
+function applyTheme(){ const t=themes[ti]; if(t==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); $('#themeBtn').title='Theme: '+t; }
+$('#themeBtn').addEventListener('click', ()=>{ ti=(ti+1)%3; store.set('idp-theme', themes[ti]); applyTheme(); });
+
+/* ---------------- chapters ---------------- */
+const slides = $$('.slide');
+const nav = $('#chapters');
+slides.forEach(s => { const a=h('a',{href:'#'+s.id}, s.dataset.title); a.addEventListener('click', e=>{ if(document.body.classList.contains('present')){ e.preventDefault(); go(slides.indexOf(s)); } }); nav.appendChild(a); });
+const navLinks = $$('a', nav);
+if('IntersectionObserver' in window){
+  const io = new IntersectionObserver(entries => { if(document.body.classList.contains('present')) return; entries.forEach(en => { if(en.isIntersecting){ navLinks.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+en.target.id)); } }); }, {rootMargin:'-40% 0px -55% 0px'});
+  slides.forEach(s=>io.observe(s));
+}
+
+/* ---------------- hero ---------------- */
+const loop = [['portal','Backstage'],['git','Service repo'],['gear','Runner build'],['package','Registry digest'],['filecode','Trusted promotion'],['git','Runtime branch'],['sync','SwarmCD'],['cubes','Running service']];
+const lt = $('#loopTrack');
+loop.forEach((t,i)=>{ lt.appendChild(h('span',{class:'loop-step'},ic(t[0])+t[1])); if(i<loop.length-1) lt.appendChild(h('span',{class:'loop-arrow','aria-hidden':'true'},'→')); });
+const loopSteps = $$('.loop-step', lt); let li=0;
+if(!reduce){ setInterval(()=>{ loopSteps.forEach((s,i)=>s.classList.toggle('lit', i===li)); li=(li+1)%loopSteps.length; }, 1300); }
+const PILLARS=[['layers','Provision','One Terraform root per provider emits a normalized contract. A linear Ansible playbook turns it into a labelled Swarm.','Terraform · Ansible · Packer · Cloudflare'],
+ ['sync','Reconcile','GitLab holds the runtime branch. SwarmCD polls it and converges every stack. No one deploys by hand.','GitLab CE · SwarmCD · Registry'],
+ ['portal','Develop','Backstage scaffolds a service, its pipeline builds a digest-pinned image, and a trusted promotion renders it into the apps stack.','Backstage · GitLab CI · renderer'],
+ ['dashboard','Operate','Metrics, logs, probes and alerts arrive by default. Encrypted backups go to object storage you choose.','Prometheus · Loki · Grafana · S3']];
+$('#pillars').innerHTML = PILLARS.map(p=>`<div class="pillar"><div class="ph">${ic(p[0])}<h3>${p[1]}</h3></div><p>${p[2]}</p><span class="tools">${p[3]}</span></div>`).join('');
+
+/* ---------------- architecture map ---------------- */
+const N = {
+  dev:{n:'Developer',sub:'service owner',ic:'laptop',vm:'p',kind:'Person',role:'Creates and ships services from Backstage. Never receives GitOps write, Docker, SSH or Swarm credentials.'},
+  eng:{n:'Platform engineer',sub:'operator',ic:'tool',vm:'p',kind:'Person',role:'Runs reviewed Terraform applies and separately authorized Ansible commissioning. Owns identity, runbooks and recovery.',src:'docs/runbooks/'},
+  user:{n:'App user',sub:'browser',ic:'user',vm:'p',kind:'Person',role:'Anyone using a platform UI or a golden-path service over HTTPS with single sign-on.'},
+  dns:{n:'Cloudflare DNS',sub:'DNS only',ic:'cloud',vm:'x',kind:'External service',role:'Wildcard A record, not proxied: Cloudflare is not an HTTP hop. Also answers Let\'s Encrypt DNS-01 challenges for Traefik.',adr:['0004']},
+  lb:{n:'Ingress endpoint',sub:'LB or routed IP',ic:'lb',vm:'x',kind:'Provider resource',role:'Provider-dependent: Hetzner Load Balancer, floating IP or routed/NAT address. Comes from the contract output ingress.public_ipv4.',adr:['0024 contract'],src:'infra/modules/providers/CONTRACT.md'},
+  jumpbox:{n:'Jumpbox',sub:'SSH entry',ic:'terminal',vm:'x',kind:'Operator access',role:'The only SSH entry, from the contract output jumpbox.public_endpoint. Ansible commissioning runs from here.',adr:['0024 contract']},
+  traefik:{n:'Traefik v3',sub:'ingress',ic:'route',vm:'2',kind:'Ingress',role:'Terminates TLS and routes by host. One replica, because ACME state is node-local. Ansible deploys platform_ingress once before GitLab, then SwarmCD reconciles it under the same stack name.',adr:['0004','0022'],src:'environments/prod/platform/ingress/stack.yml'},
+  crowdsec:{n:'CrowdSec',sub:'observe mode',ic:'eye',vm:'2',kind:'Edge protection',role:'Parses Traefik access logs in observe-first mode. Decisions are visible with cscli but no bouncer enforces them yet.',src:'environments/prod/platform/edge/stack.yml'},
+  oauth:{n:'OAuth2 Proxy',sub:'ForwardAuth',ic:'shield',vm:'2',kind:'Identity',role:'Traefik ForwardAuth for platform UIs. Group-gated access to Backstage, Grafana, Prometheus, SwarmCD and the Traefik dashboard.',adr:['0021'],src:'environments/prod/platform/auth/stack.yml'},
+  keycloak:{n:'Keycloak',sub:'OIDC issuer',ic:'key',vm:'2',kind:'Identity',role:'Sovereign OIDC issuer for OAuth2 Proxy and for GitLab\'s native login. Self-registration is disabled. State lives in the central PostgreSQL.',adr:['0021','0019'],src:'environments/prod/platform/identity/stack.yml'},
+  backstage:{n:'Backstage',sub:'portal',ic:'portal',vm:'2',kind:'Developer portal',role:'Catalog, search and scaffolder. Discovers and creates repositories in self-hosted GitLab with a dedicated group token. Sits on its own ingress and database networks.',adr:['0011'],src:'environments/prod/platform/backstage/'},
+  gitlab:{n:'GitLab CE',sub:'19.3.1',ic:'git',vm:'1',kind:'Source and CI',role:'Bootstrap-managed, not SwarmCD-managed, on a dedicated block volume. Hosts platform/idp-docker-stack (the runtime repository) and platform/services/*. Browser login uses native OIDC.',adr:['0020'],src:'environments/prod/platform/gitlab/stack.yml'},
+  registry:{n:'Registry',sub:'registry.${DOMAIN}',ic:'package',vm:'1',kind:'Image supply',role:'Bundled, filesystem-backed GitLab Container Registry. Every deployed image is referenced by sha256 digest. Bootstrap fails closed if expected artifacts are missing.',adr:['0015'],src:'docs/runbooks/standalone-to-gitlab-registry-migration.md'},
+  runner:{n:'GitLab Runner',sub:'Docker executor',ic:'gear',vm:'3',kind:'CI executor',role:'Non-privileged Docker executor, bootstrap-managed and registered during an approved apply. Builds, tests and publishes images.',src:'environments/prod/platform/gitlab-runner/stack.yml'},
+  promo:{n:'Promotion',sub:'trusted CI · renderer',ic:'filecode',vm:'3',kind:'Delivery',role:'Platform-owned pipeline job. Validates source, image and intent, writes the service definition and renders the aggregate platform_apps stack plus metrics discovery. Service pipelines may only trigger golden-path-update.',adr:['0024 golden path'],src:'scripts/render-apps-stack.py'},
+  swarmcd:{n:'SwarmCD',sub:'GitOps',ic:'sync',vm:'2',kind:'GitOps reconciler',role:'Polls the configured GitLab branch and compose_file with a read-only deploy token, then converges each stack. It never calls the renderer.',adr:['0003'],src:'infra/ansible/templates/runtime-config/swarmcd-config.yml.j2'},
+  swarm:{n:'Docker Swarm',sub:'3 managers',ic:'swarm',vm:'g',kind:'Orchestrator',role:'Three managers for control-plane quorum. Node labels drive placement: workload=gitlab, platform and apps. node-exporter, cAdvisor and Grafana Alloy run globally on every node.',adr:['0002','0005']},
+  db:{n:'PostgreSQL',sub:'central · volume',ic:'db',vm:'2',kind:'State',role:'One internal platform_database stack for Backstage and Keycloak, pinned by persistence.platform-db=true on a provider block volume.',adr:['0019','0017'],src:'environments/prod/platform/database/stack.yml'},
+  apps:{n:'platform_apps',sub:'your services',ic:'cubes',vm:'3',kind:'Workloads',role:'The single generated stack holding every golden-path service. Updates roll one task at a time with a 30-second monitor and pause on failure.',adr:['0024 golden path'],src:'environments/prod/apps/stack.yml'},
+  prom:{n:'Prometheus',sub:'metrics',ic:'metrics',vm:'2',kind:'Metrics',role:'Docker DNS discovery for platform targets, file discovery for apps, blackbox probes. No Docker socket mount.',adr:['0008','0022'],src:'environments/prod/platform/observability/stack.yml'},
+  alert:{n:'Alertmanager',sub:'routing',ic:'bell',vm:'2',kind:'Alerting',role:'Severity grouping and inhibition. Email is opt-in; with it disabled a no-op receiver is used.',src:'docs/runbooks/alerting-smoke-test.md'},
+  loki:{n:'Loki',sub:'logs',ic:'logs',vm:'2',kind:'Logs',role:'Stores container and node logs shipped by Grafana Alloy, which runs on every node.',adr:['0022']},
+  grafana:{n:'Grafana',sub:'dashboards',ic:'dashboard',vm:'2',kind:'Dashboards',role:'Provisioned dashboards and datasources from versioned Docker configs. Behind ForwardAuth; signed-in platform users get Viewer by default.',adr:['0008']},
+  backup:{n:'Backup jobs',sub:'systemd timers',ic:'archive',vm:'x',kind:'Recovery',role:'Run on the nodes that own the data. GitLab backups, PostgreSQL dumps and volume data, age-encrypted before upload.',adr:['0023'],src:'docs/runbooks/idp-disaster-recovery.md'},
+  s3:{n:'Object storage',sub:'S3-compatible',ic:'bucket',vm:'x',kind:'External storage',role:'Independent bucket at Hetzner or OVH, chosen separately from the compute provider.',adr:['0014','0023']},
+  tf:{n:'Terraform',sub:'one root / provider',ic:'layers',vm:'x',kind:'Provisioning',role:'Creates VMs, network, ingress endpoint, volumes and DNS, then writes the versioned schema-v2 handoff that commissioning consumes.',adr:['0013','0024 contract'],src:'infra/deployments/'},
+  ansible:{n:'Ansible',sub:'commissioning',ic:'listcheck',vm:'x',kind:'Bootstrap',role:'A linear swarm.yml playbook run from the controller bundle. Forms the Swarm, labels nodes, creates networks and configs, bootstraps GitLab and starts SwarmCD.',adr:['0006'],src:'infra/ansible/swarm.yml'}
+};
+const POS = {
+  dev:[70,140], user:[70,360], eng:[70,600],
+  dns:[210,250], lb:[210,380], jumpbox:[210,600],
+  grafana:[360,150], prom:[480,150], alert:[600,150], backstage:[720,150],
+  traefik:[360,290], oauth:[480,290], keycloak:[600,290], swarmcd:[720,290],
+  crowdsec:[360,430], loki:[480,430], db:[600,430],
+  gitlab:[920,165], registry:[1040,165],
+  apps:[975,385], promo:[905,490], runner:[1045,490],
+  tf:[360,690], ansible:[520,690], backup:[840,690], s3:[1040,690]
+};
+const BAND = {x:290,y:585,w:820,h:40};
+const ZONES = [
+  {c:'vm2',x:290,y:80,w:510,h:480,t:'VM-02 · PLATFORM · workload=platform'},
+  {c:'vm1',x:840,y:80,w:270,h:190,t:'VM-01 · GITLAB'},
+  {c:'vm3',x:840,y:330,w:270,h:230,t:'VM-03 · APPS · runner=true'}
+];
+const EDGES = [
+  {a:'user',b:'dns',f:['request'],d:1,l:'lookup'},
+  {a:'user',b:'lb',f:['request'],l:'HTTPS'},
+  {a:'lb',b:'traefik',f:['request']},
+  {a:'traefik',b:'crowdsec',f:['request'],d:1,l:'access logs'},
+  {a:'traefik',b:'oauth',f:['request'],l:'ForwardAuth'},
+  {a:'oauth',b:'keycloak',f:['request'],l:'OIDC'},
+  {a:'traefik',b:'grafana',f:['request']},
+  {a:'traefik',b:'backstage',f:['request']},
+  {a:'traefik',b:'gitlab',f:['request'],c:[640,200]},
+  {a:'gitlab',b:'keycloak',f:['request'],l:'native OIDC'},
+  {a:'traefik',b:'apps',f:['request'],c:[400,375],c2:[800,375]},
+  {a:'dev',b:'backstage',f:['delivery'],c:[400,40],l:'template'},
+  {a:'backstage',b:'gitlab',f:['delivery'],l:'create repo'},
+  {a:'gitlab',b:'runner',f:['delivery'],c:[1085,300],l:'CI job'},
+  {a:'runner',b:'registry',f:['delivery'],c:[1112,330],l:'push'},
+  {a:'runner',b:'promo',f:['delivery'],l:'request'},
+  {a:'promo',b:'gitlab',f:['delivery'],l:'commit'},
+  {a:'swarmcd',b:'gitlab',f:['delivery'],d:1,l:'poll'},
+  {a:'swarmcd',b:'apps',f:['delivery'],l:'reconcile'},
+  {a:'registry',b:'apps',f:['delivery'],d:1,l:'pull'},
+  {a:'eng',b:'tf',f:['provision'],c:[200,722],l:'apply'},
+  {a:'eng',b:'jumpbox',f:['provision'],l:'SSH'},
+  {a:'jumpbox',b:'ansible',f:['provision'],c:[380,612]},
+  {a:'tf',b:'ansible',f:['provision'],l:'handoff'},
+  {a:'tf',b:'dns',f:['provision']},
+  {a:'tf',b:'lb',f:['provision']},
+  {a:'ansible',b:'swarm',f:['provision'],pb:[520,627]},
+  {a:'ansible',b:'traefik',f:['provision']},
+  {a:'ansible',b:'gitlab',f:['provision']},
+  {a:'ansible',b:'runner',f:['provision']},
+  {a:'ansible',b:'swarmcd',f:['provision']},
+  {a:'apps',b:'prom',f:['telemetry'],c:[700,235],l:'/metrics'},
+  {a:'traefik',b:'prom',f:['telemetry']},
+  {a:'swarm',b:'loki',f:['telemetry'],pa:[480,583],l:'Alloy'},
+  {a:'prom',b:'alert',f:['telemetry']},
+  {a:'prom',b:'grafana',f:['telemetry']},
+  {a:'loki',b:'grafana',f:['telemetry']},
+  {a:'backstage',b:'db',f:['data']},
+  {a:'keycloak',b:'db',f:['data']},
+  {a:'gitlab',b:'backup',f:['data'],c:[790,430]},
+  {a:'db',b:'backup',f:['data']},
+  {a:'backup',b:'s3',f:['data'],l:'age-encrypted'}
+];
+const FLOWS = {
+  delivery:{label:'Golden path',ic:'portal',title:'Golden-path delivery',desc:'How a new service goes from a template to running containers.',steps:['Developer picks a template in Backstage.','Backstage creates platform/services/<name> in GitLab.','The Runner tests, builds and pushes a digest-pinned image.','The service pipeline requests a scoped promotion.','Trusted CI renders platform_apps and commits it to the runtime branch.','SwarmCD polls the branch and reconciles the stack on VM-03.']},
+  request:{label:'User request',ic:'globe',title:'Inbound request',desc:'From DNS lookup to a protected UI, GitLab or an app.',steps:['The client resolves the wildcard record in Cloudflare (DNS only).','HTTPS reaches the provider ingress endpoint, then Traefik on VM-02.','Platform UIs pass ForwardAuth through OAuth2 Proxy and Keycloak.','GitLab handles its own browser login with native OIDC.','Traefik access logs feed CrowdSec in observe mode.']},
+  provision:{label:'Provisioning',ic:'layers',title:'Provisioning and bootstrap',desc:'The one-time path that creates everything SwarmCD depends on.',steps:['The platform engineer applies one provider\'s Terraform root.','Terraform creates DNS and the ingress endpoint and writes the handoff.','Ansible runs from the jumpbox, forms the Swarm, and applies labels, networks and configs.','Ansible bootstraps Traefik, GitLab and the Runner.','After images are verified, Ansible starts SwarmCD.']},
+  telemetry:{label:'Telemetry',ic:'metrics',title:'Metrics and logs',desc:'Signals every service gets without asking.',steps:['Apps expose /metrics; the renderer commits their file discovery.','Traefik and the node agents are scraped by Prometheus.','Alloy ships stdout/stderr from every node to Loki.','Grafana reads Prometheus and Loki; Alertmanager routes alerts.']},
+  data:{label:'Data & backup',ic:'archive',title:'State and backup',desc:'Where durable state lives and how it leaves the cluster.',steps:['Backstage and Keycloak keep state in the central PostgreSQL on VM-02.','GitLab keeps its own data on a dedicated VM-01 volume.','Systemd timers produce application-consistent backups.','Artifacts are age-encrypted and uploaded to independent object storage.']}
+};
+const SVGNS='http://www.w3.org/2000/svg';
+const amap=$('#amap'), side=$('#mapSide');
+const R=26;
+const clipTo=(p,t,r)=>{ const dx=t[0]-p[0], dy=t[1]-p[1], L=Math.hypot(dx,dy)||1; return [p[0]+dx/L*r, p[1]+dy/L*r]; };
+const f1=n=>n.toFixed(1);
+function edgeGeom(e){
+  const A=e.pa||POS[e.a]||[BAND.x+BAND.w/2,BAND.y], B=e.pb||POS[e.b]||[BAND.x+BAND.w/2,BAND.y];
+  const c1=e.c||[(A[0]+B[0])/2,(A[1]+B[1])/2], c2=e.c2||null;
+  const s=e.pa?A:clipTo(A,c1,R+3), t=e.pb?B:clipTo(B,c2||c1,R+6);
+  let d, mid;
+  if(c2){ d=`M${f1(s[0])} ${f1(s[1])} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${f1(t[0])} ${f1(t[1])}`; mid=[(s[0]+3*c1[0]+3*c2[0]+t[0])/8,(s[1]+3*c1[1]+3*c2[1]+t[1])/8]; }
+  else { d=`M${f1(s[0])} ${f1(s[1])} Q${c1[0]} ${c1[1]} ${f1(t[0])} ${f1(t[1])}`; mid=[(s[0]+2*c1[0]+t[0])/4,(s[1]+2*c1[1]+t[1])/4]; }
+  return {d,mid};
+}
+function buildMap(){
+  let s=`<defs><marker id="ahOff" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="ah-off" d="M0 0L10 5L0 10z"/></marker><marker id="ahOn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="ah-on" d="M0 0L10 5L0 10z"/></marker></defs>`;
+  s+=`<text class="cap" x="70" y="72" text-anchor="middle">PEOPLE</text><text class="cap" x="210" y="72" text-anchor="middle">EDGE</text><text class="cap" x="290" y="662">PROVISIONING AND STORAGE · OUTSIDE THE SWARM</text>`;
+  ZONES.forEach(z=>{ s+=`<g class="zone ${z.c}"><rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="16"/></g>`; });
+  s+=`<g id="edgeG">`;
+  EDGES.forEach((e,i)=>{ const g=edgeGeom(e); s+=`<path class="e${e.d?' dash':''}" data-i="${i}" d="${g.d}" marker-end="url(#ahOff)"/>`; });
+  s+=`</g><g id="elblG"></g>`;
+  ZONES.forEach(z=>{ const w=Math.round(z.t.length*7.4+22); s+=`<g class="tab ${z.c}"><rect x="${z.x+14}" y="${z.y-11}" width="${w}" height="22" rx="11"/><text x="${z.x+24}" y="${z.y+4}">${z.t}</text></g>`; });
+  s+=`<g class="inode band" data-id="swarm" tabindex="0" role="button" aria-label="Docker Swarm"><rect class="bg" x="${BAND.x}" y="${BAND.y}" width="${BAND.w}" height="${BAND.h}" rx="10"/><use href="#i-swarm" x="${BAND.x+12}" y="${BAND.y+8}" width="24" height="24"/><text class="l" x="${BAND.x+46}" y="${BAND.y+25}">Docker Swarm · 3 managers</text><text class="s" x="${BAND.x+250}" y="${BAND.y+25}">global on every node: node-exporter · cAdvisor · Grafana Alloy</text></g>`;
+  Object.entries(POS).forEach(([id,[x,y]])=>{ const d=N[id]; const cls=d.vm==='p'?'person':(d.vm==='1'||d.vm==='2'||d.vm==='3')?'vm'+d.vm:'';
+    s+=`<g class="inode ${cls}" data-id="${id}" tabindex="0" role="button" aria-label="${d.n}" transform="translate(${x} ${y})"><circle class="bg" r="${R}"/><use href="#i-${d.ic}" x="-12" y="-12" width="24" height="24"/><text class="l" y="44">${d.n}</text><text class="s" y="57">${d.sub}</text></g>`; });
+  amap.innerHTML=s;
+  $$('.inode',amap).forEach(g=>{ const id=g.dataset.id; g.addEventListener('click',()=>selectNode(id)); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectNode(id); } }); });
+}
+let curFlow = store.get('idp-flow') || 'delivery'; if(!FLOWS[curFlow]) curFlow='delivery';
+let selNode = null;
+const flowSeg=$('#flowSeg');
+Object.entries(FLOWS).forEach(([k,f])=>{ const b=h('button',{type:'button','data-k':k,'aria-pressed':String(k===curFlow)}, ic(f.ic)+f.label); b.addEventListener('click',()=>{ curFlow=k; selNode=null; store.set('idp-flow',k); $$('button',flowSeg).forEach(x=>x.setAttribute('aria-pressed', String(x.dataset.k===k))); renderMap(); }); flowSeg.appendChild(b); });
+function activeIdx(){ return EDGES.map((e,i)=>i).filter(i=>{ const e=EDGES[i]; return selNode ? (e.a===selNode||e.b===selNode) : e.f.includes(curFlow); }); }
+function renderMap(){
+  const act=new Set(activeIdx()); const on=new Set(); act.forEach(i=>{ on.add(EDGES[i].a); on.add(EDGES[i].b); }); if(selNode) on.add(selNode);
+  amap.classList.add('dim');
+  $$('.inode',amap).forEach(g=>{ const id=g.dataset.id; g.classList.toggle('on', on.has(id)); g.classList.toggle('sel', id===selNode); g.setAttribute('aria-pressed', String(id===selNode)); });
+  const eg=$('#edgeG',amap); const lg=$('#elblG',amap); lg.innerHTML='';
+  $$('path.e',eg).forEach(p=>{ const i=+p.dataset.i; const a=act.has(i); p.classList.toggle('on',a); p.setAttribute('marker-end', a?'url(#ahOn)':'url(#ahOff)'); if(a) eg.appendChild(p); });
+  act.forEach(i=>{ const e=EDGES[i]; if(!e.l) return; const g=edgeGeom(e); const t=document.createElementNS(SVGNS,'text'); t.setAttribute('class','elbl'); t.setAttribute('x',f1(g.mid[0])); t.setAttribute('y',f1(g.mid[1]-4)); t.textContent=e.l; lg.appendChild(t); });
+  renderSide();
+}
+const vmName = {'1':['VM-01 GitLab','vm1'],'2':['VM-02 Platform','vm2'],'3':['VM-03 Apps','vm3'],'g':['Every node','off'],'x':['Outside the Swarm','off'],'p':['Person','acc']};
+const avColor = {'1':'var(--vm1)','2':'var(--vm2)','3':'var(--vm3)','p':'var(--accent)','g':'var(--ink)','x':'var(--ink)'};
+function renderSide(){
+  if(selNode){
+    const d=N[selNode]; const [vmn,vmc]=vmName[d.vm];
+    const links = activeIdx().map(i=>{ const e=EDGES[i]; return e.a===selNode ? `→ ${N[e.b].n}${e.l?` <span class="note">(${e.l})</span>`:''}` : `← ${N[e.a].n}${e.l?` <span class="note">(${e.l})</span>`:''}`; });
+    side.innerHTML = `<div class="head"><span class="av" style="color:${avColor[d.vm]}">${ic(d.ic)}</span><div><span class="kind">${d.kind}</span><h3>${d.n}</h3></div></div>
+      <div class="chips"><span class="chip ${vmc}"><span class="dot"></span>${vmn}</span></div><p style="font-size:14.5px">${d.role}</p>
+      <dl class="kv">${links.length?`<div><dt>Connections</dt><dd>${links.join('<br>')}</dd></div>`:''}
+      ${d.adr?`<div><dt>Decision records</dt><dd class="chips">${d.adr.map(a=>`<span class="chip acc">ADR ${a}</span>`).join('')}</dd></div>`:''}
+      ${d.src?`<div><dt>Source</dt><dd class="path">${d.src}</dd></div>`:''}</dl>
+      <button class="btn" type="button" id="backFlow">← Back to ${FLOWS[curFlow].label.toLowerCase()} flow</button>`;
+    $('#backFlow').addEventListener('click',()=>{ selNode=null; renderMap(); });
+  } else {
+    const f=FLOWS[curFlow];
+    side.innerHTML = `<div class="head"><span class="av" style="color:var(--accent)">${ic(f.ic)}</span><div><span class="kind">Flow</span><h3>${f.title}</h3></div></div><p class="note">${f.desc}</p><ol>${f.steps.map(s=>`<li>${s}</li>`).join('')}</ol><p class="note">Click any component for details.</p>`;
+  }
+}
+function selectNode(id){ selNode = selNode===id ? null : id; renderMap(); }
+buildMap(); renderMap();
+
+/* ---------------- workflows ---------------- */
+const PERSONAS = {
+  dev:{n:'Developer',ic:'laptop',c:'Ships services',goal:'Ship services without managing infrastructure.',uses:['Backstage','GitLab','Grafana','Loki'],never:['SSH to nodes','Docker or Swarm access','GitOps write tokens'],flows:['create','ship','rollback','debug','secret']},
+  eng:{n:'Platform engineer',ic:'tool',c:'Runs the platform',goal:'Keep the platform reproducible, secure and recoverable.',uses:['GitHub PRs','Terraform','Ansible commissioning','Keycloak admin','Runbooks'],never:['Hand-edited containers','Edits to generated platform_apps','Secrets in Git'],flows:['standup','change','onboard','rotate','alert','restore']},
+  user:{n:'App user',ic:'user',c:'Uses services',goal:'Reach internal apps and platform tools with one sign-in.',uses:['Browser','Keycloak sign-in'],never:['Separate passwords per app','Direct access to servers'],flows:['open','access']}
+};
+const L3 = { dev:['You','Backstage & GitLab','Platform automation'], devObs:['You','Observability','Platform automation'], devSec:['You','Platform engineer','Platform automation'],
+  engStand:['You','GitHub Actions','Platform'], engChange:['You','GitHub review & CI','GitLab runtime'], engId:['You','Identity','Tools'], engOps:['You','Observability','Platform'], engRestore:['You','Restore automation','Platform'],
+  userOpen:['You','Edge & identity','Service'], userAccess:['You','Platform engineer','Identity & tools'] };
+const WF = {
+  create:{t:'Create a service',lanes:L3.dev,out:'A running, monitored service with no ticket, no SSH and no cluster credentials. Promotion success means the GitOps commit exists; the deployment verifier confirms the rollout itself.',steps:[
+    [0,'portal','Open Create','In Backstage, choose the platform-nodejs-service template.','Backstage'],
+    [0,'form','Describe the service','Name, resource profile (small or medium), exposure mode and metrics path.','Template form'],
+    [1,'git','Repository created','Backstage creates platform/services/<name> in GitLab with a ready pipeline.','GitLab'],
+    [2,'gear','Test and build','The generated pipeline validates, tests and builds on the VM-03 Runner.','GitLab CI'],
+    [2,'package','Image pinned','The image is pushed to the Registry and referenced by its sha256 digest.','Registry'],
+    [2,'send','Request promotion','A request-only trigger starts golden-path-update in the platform repository.','Trigger token'],
+    [2,'filecode','Render and commit','Trusted CI validates the request, writes the definition, renders platform_apps and commits only those files.','Renderer'],
+    [2,'sync','Roll out','SwarmCD picks up the commit and starts the service on VM-03.','SwarmCD'],
+    [0,'check','Service is live','Your URL works behind SSO, and metrics and logs already appear in Grafana.','Grafana']]},
+  ship:{t:'Ship a change',lanes:L3.dev,out:'Every change follows the same path as the first deploy. The image and source-revision labels show exactly what is running.',steps:[
+    [0,'git','Push a change','Merge to the default branch of your service repository.','GitLab'],
+    [1,'gear','Pipeline runs','Tests run and a new image is built and pushed with a new digest.','GitLab CI'],
+    [2,'filecode','Promotion','The definition is updated with the new digest and source revision.','Renderer'],
+    [2,'sync','Rolling update','One task at a time, a 30-second monitor, and a pause if the update fails.','Swarm'],
+    [1,'metrics','Watch the release','Dashboards and logs show the new revision as it takes traffic.','Grafana · Loki'],
+    [0,'check','Confirm','The verifier checks image digests, health and readiness for every task.','verify-app-deployment']]},
+  rollback:{t:'Roll back',lanes:L3.dev,out:'Rollback is a Git revert through the same promotion path. Nobody runs docker service update by hand.',steps:[
+    [0,'bell','Spot the problem','An alert fires or dashboards show errors after a release.','Alertmanager'],
+    [0,'undo','Revert the digest','Revert the definition to the previous digest and source revision.','Git revert'],
+    [2,'filecode','Regenerate','platform_apps and Prometheus file_sd are rendered again from the definitions.','Renderer'],
+    [2,'sync','Reconcile','SwarmCD rolls the earlier image back out.','SwarmCD'],
+    [1,'dashboard','Verify recovery','Error rates drop back in Grafana.','Grafana']]},
+  debug:{t:'Debug in production',lanes:L3.devObs,out:'Everything needed to debug is visible in the browser. The fix ships through the normal pipeline.',steps:[
+    [0,'bell','Get notified','An alert or a user report points at your service.','Alertmanager'],
+    [1,'dashboard','Open dashboards','Container and ingress dashboards show load, errors and restarts.','Grafana'],
+    [1,'logs','Read the logs','Search your service\'s stdout and stderr in Loki through Grafana.','Loki'],
+    [1,'metrics','Query metrics','Your /metrics endpoint is scraped automatically.','Prometheus'],
+    [0,'git','Fix and push','Commit the fix to your service repository.','GitLab'],
+    [2,'sync','Rolled out','The fix reaches VM-03 like any other change.','SwarmCD']]},
+  secret:{t:'Use a secret',lanes:L3.devSec,out:'Secret values never enter Git or the service repository. Rotation is a reviewed change to a new versioned reference.',steps:[
+    [0,'form','Reference a secret','Add an approved reference such as database-url, api-key or oauth-client-secret to the definition.','Definition'],
+    [1,'lock','Store the value','The engineer adds it to the Ansible-only secrets input, keyed <service>__<reference>.','TF_VAR_SECRETS_JSON'],
+    [2,'listcheck','Create Docker secret','Commissioning creates the Swarm secret.','Ansible'],
+    [2,'cubes','Mounted at runtime','Swarm mounts it at /run/secrets/<reference>.','Swarm'],
+    [0,'sync','Rotate safely','Switch to a versioned reference such as database-url-v2, then retire the old secret.','Definition']]},
+  standup:{t:'Stand up an environment',lanes:L3.engStand,out:'A labelled three-manager Swarm with GitLab, identity, portal and telemetry, handed to GitOps only after the images are proven.',steps:[
+    [0,'folder','Choose a provider','Pick infra/deployments/hetzner, ovh or proxmox and fill an ignored tfvars file.','Terraform root'],
+    [0,'layers','Plan and review','Initialize the S3 state backend and review terraform plan.','terraform plan'],
+    [1,'server','Apply','VMs, network, ingress endpoint, volumes and DNS. A versioned handoff is written.','Terraform workflow'],
+    [0,'play','Dispatch commissioning','Start Ansible Development Commissioning for the verified revision.','GitHub Actions'],
+    [2,'listcheck','Build the Swarm','Swarm, labels, storage, networks, configs and secrets.','Ansible'],
+    [2,'git','Bootstrap GitLab','Traefik, GitLab CE, the Registry and the Runner come up first.','Ansible'],
+    [2,'gate','Image gate','Missing images trigger one supply pipeline. Otherwise bootstrap fails closed.','GitLab CI'],
+    [2,'sync','Hand over to GitOps','SwarmCD starts and reconciles every platform stack.','SwarmCD'],
+    [0,'clipboard','Review evidence','Post-deploy checks and the provenance manifest record what was deployed.','Evidence']]},
+  change:{t:'Change a platform stack',lanes:L3.engChange,out:'Every runtime change is reviewed, validated and traceable to a commit on the GitLab runtime branch.',steps:[
+    [0,'pr','Open a pull request','Edit a stack file or Ansible template in GitHub.','GitHub'],
+    [1,'filter','Classify paths','The scope classifier picks which validation domains run.','Classifier'],
+    [1,'check','Validation gate','Core contracts plus the owning domain must pass.','Platform Validation'],
+    [0,'merge','Review and merge','Merge to main. The runtime does not change yet.','GitHub'],
+    [1,'package','Publish snapshot','A verified bootstrap snapshot is published.','GitHub Actions'],
+    [0,'play','Dispatch commissioning','A separately authorized run promotes the snapshot.','Commissioning'],
+    [2,'git','Runtime branch updated','The snapshot lands on the GitLab branch that SwarmCD watches.','GitLab'],
+    [2,'sync','Reconcile','SwarmCD converges the changed stack.','SwarmCD']]},
+  onboard:{t:'Onboard a person',lanes:L3.engId,out:'One Keycloak identity covers Backstage, GitLab and Grafana. Offboarding reverses the same steps.',steps:[
+    [0,'users','Create the user','Create or verify the person in Keycloak. Self-registration is disabled.','Keycloak admin'],
+    [0,'key','Assign groups','platform-users for everyone; platform-admins only for human operators.','Keycloak'],
+    [1,'shield','First sign-in','A temporary credential forces a password change on first login.','Keycloak'],
+    [0,'portal','Catalog entity','Add a matching Backstage User entity for ownership.','Backstage'],
+    [2,'git','GitLab and Grafana','GitLab signs in through native OIDC; Grafana grants Viewer by default.','GitLab · Grafana'],
+    [0,'trash','Offboard later','Disable the user, remove groups, block GitLab and remove the catalog entity.','Runbook']]},
+  rotate:{t:'Rotate a credential',lanes:L3.engStand,out:'The old credential stays valid until the new one is proven, so there is no outage window.',steps:[
+    [0,'key','Create a new token','Create a new GitLab group token and store it as backstage_gitlab_token in the secrets input.','Secrets input'],
+    [1,'layers','Approved apply','Run the reviewed Terraform apply and commissioning.','Terraform · Ansible'],
+    [2,'lock','New Swarm secret','Ansible creates a timestamped secret and rolls Backstage onto it.','Ansible'],
+    [0,'check','Verify','Backstage discovers platform/services and loads the template.','Backstage'],
+    [0,'trash','Revoke the old token','Only after the new Backstage task is healthy.','GitLab']]},
+  alert:{t:'Respond to an alert',lanes:L3.engOps,out:'Diagnosis happens in Grafana; the fix goes through review and GitOps, never by hand on a node.',steps:[
+    [2,'metrics','Rule fires','A Prometheus alert rule crosses its threshold.','Prometheus'],
+    [2,'bell','Alert routed','Grouped by severity with inhibition; email when enabled.','Alertmanager'],
+    [1,'dashboard','Triage','Cluster, container, ingress and observability dashboards.','Grafana'],
+    [1,'logs','Find the cause','Correlate with logs from every node through Alloy and Loki.','Loki'],
+    [0,'book','Follow the runbook','Runbooks cover GitLab, database, identity break-glass and VM replacement.','docs/runbooks'],
+    [0,'pr','Fix through Git','The change goes through review and promotion like any other.','GitHub → GitLab']]},
+  restore:{t:'Run a restore drill',lanes:L3.engRestore,out:'Measured RPO and RTO replace the targets. Until then, ≤ 24 h and ≤ 4 h are goals, not facts.',steps:[
+    [0,'server','Fresh infrastructure','An approved apply on new VMs, or recovery of the existing ones.','Terraform'],
+    [0,'clipboard','Preflight','Check the recovery secret inventory and the backup artifacts.','Runbook'],
+    [1,'git','Restore GitLab','Repositories, Registry and the runtime branch.','Restore scripts'],
+    [1,'db','Restore PostgreSQL','Backstage and Keycloak state.','Restore scripts'],
+    [2,'sync','Secrets, configs, reconcile','Runtime secrets and configs return, then SwarmCD reconciles.','Ansible · SwarmCD'],
+    [0,'check','Verify','TLS, Keycloak login and TOTP, OIDC, Runner CI, Registry pull and dashboards.','Checklist'],
+    [0,'timer','Record RPO and RTO','Actual numbers, problems and manual steps go into the drill record.','Evidence']]},
+  open:{t:'Open a protected app',lanes:L3.userOpen,out:'One sign-in works across apps and platform UIs. Internal-only services have no public route at all.',steps:[
+    [0,'globe','Open the app','Go to https://<service>.<domain> in a browser.','Browser'],
+    [1,'cloud','Resolve the name','Cloudflare answers from the wildcard record. It is DNS only, not a proxy.','Cloudflare DNS'],
+    [1,'route','Reach Traefik','HTTPS lands on the ingress endpoint and Traefik terminates TLS.','Traefik'],
+    [1,'shield','Check the session','ForwardAuth asks OAuth2 Proxy whether you are signed in and in an allowed group.','OAuth2 Proxy'],
+    [0,'key','Sign in once','Keycloak asks for your password and second factor, then sends you back.','Keycloak'],
+    [2,'cubes','Request forwarded','Traefik forwards the request to the service on VM-03.','platform_apps'],
+    [0,'check','Use the app','The same session works for Backstage, Grafana and other platform UIs.','SSO session']]},
+  access:{t:'Get access',lanes:L3.userAccess,out:'Access is granted once, by group, and removed in one place when someone leaves.',steps:[
+    [0,'mail','Ask for access','Self-registration is disabled, so a platform engineer creates accounts.','Request'],
+    [1,'key','Create the account','The engineer creates your Keycloak user and assigns platform-users.','Keycloak'],
+    [2,'shield','First sign-in','A temporary credential forces a password change on first login.','Keycloak'],
+    [1,'portal','Catalog identity','A matching Backstage User entity links you to what you own.','Backstage'],
+    [2,'git','GitLab via OIDC','You sign in to GitLab with the same Keycloak identity.','GitLab'],
+    [0,'dashboard','Viewer in Grafana','Signed-in platform users can view dashboards by default.','Grafana']]}
+};
+let persona = store.get('idp-persona') || 'dev'; if(!PERSONAS[persona]) persona='dev';
+let wfK = PERSONAS[persona].flows[0], wI = 0, wPlaying = false, wTimer = null;
+const pEl=$('#personas'), lanesEl=$('#lanes');
+Object.entries(PERSONAS).forEach(([k,p])=>{ const b=h('button',{class:'pbtn',type:'button','data-k':k,'aria-pressed':String(k===persona)},`<span class="av">${ic(p.ic)}</span><span><b>${p.n}</b><span class="c">${p.c}</span></span>`); b.addEventListener('click',()=>setPersona(k)); pEl.appendChild(b); });
+function setPersona(k){ persona=k; store.set('idp-persona',k); $$('.pbtn',pEl).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k))); wfK=PERSONAS[k].flows[0]; renderPersona(); renderWf(); }
+function renderPersona(){
+  const p=PERSONAS[persona];
+  $('#persona').innerHTML = `<div><p class="lbl">${p.n} · goal</p><p class="goal">${p.goal}</p></div>
+    <div><p class="lbl">Works in</p><div class="chips">${p.uses.map(u=>`<span class="chip acc">${u}</span>`).join('')}</div></div>
+    <div><p class="lbl">Never needs</p><div class="chips">${p.never.map(u=>`<span class="chip never">${u}</span>`).join('')}</div></div>`;
+  const seg=$('#wfSeg'); seg.innerHTML='';
+  p.flows.forEach(f=>{ const b=h('button',{type:'button','data-k':f,'aria-pressed':String(f===wfK)},WF[f].t); b.addEventListener('click',()=>{ wfK=f; $$('button',seg).forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderWf(); }); seg.appendChild(b); });
+}
+function stopW(){ wPlaying=false; if(wTimer){ clearInterval(wTimer); wTimer=null; } $('#wPlayLbl').textContent='Play'; lanesEl.classList.remove('playing'); }
+function renderWf(){
+  stopW(); wI=0;
+  const w=WF[wfK], n=w.steps.length;
+  lanesEl.style.gridTemplateColumns = `120px repeat(${n}, minmax(116px,1fr))`;
+  lanesEl.style.minWidth = (120+n*116)+'px';
+  lanesEl.style.gridTemplateRows = `repeat(${w.lanes.length}, minmax(118px,auto))`;
+  let html = `<svg class="wlinks" aria-hidden="true"><defs><marker id="wa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="wah" d="M0 0L10 5L0 10z"/></marker><marker id="waOn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="wah-on" d="M0 0L10 5L0 10z"/></marker></defs><g></g></svg>`;
+  w.lanes.forEach((l,i)=>{ html+=`<div class="lane-bg${i===0?' you':''}${i%2?' alt':''}" style="grid-row:${i+1}"><span>${i===0?ic(PERSONAS[persona].ic,'style="width:16px;height:16px"'):''}${l}</span></div>`; });
+  w.steps.forEach((s,i)=>{ const cls = s[0]===0?'you':(s[0]===w.lanes.length-1?'auto':''); html+=`<button type="button" class="wstep ${cls}" data-i="${i}" style="grid-row:${s[0]+1}; grid-column:${i+2}" aria-label="Step ${i+1}: ${s[2]}"><span class="wic">${ic(s[1])}<span class="wnum">${i+1}</span></span><span class="wt">${s[2]}</span></button>`; });
+  lanesEl.innerHTML = html;
+  $$('.wstep',lanesEl).forEach(b=>b.addEventListener('click',()=>{ stopW(); wI=+b.dataset.i; renderWStep(); }));
+  $('#wOutcome').textContent = w.out;
+  renderWStep();
+}
+function renderWStep(){
+  const w=WF[wfK], s=w.steps[wI];
+  $$('.wstep',lanesEl).forEach((b,i)=>{ b.classList.toggle('sel', i===wI); b.classList.toggle('past', i<wI); });
+  const cls = s[0]===0?'you':(s[0]===w.lanes.length-1?'auto':'');
+  $('#wStep').innerHTML = `<div class="head"><span class="wstep ${cls}" style="padding:0; cursor:default"><span class="wic">${ic(s[1])}</span></span><div><p class="eyebrow">Step ${wI+1} of ${w.steps.length} · ${w.lanes[s[0]]}</p><h3>${s[2]}</h3></div></div><p style="font-size:15px">${s[3]}</p><div class="chips"><span class="chip">${s[4]}</span></div>`;
+  $('#wCount').textContent = `${wI+1} / ${w.steps.length}`;
+  $('#wPrev').disabled = wI===0; $('#wNext').disabled = wI===w.steps.length-1;
+  drawLinks();
+}
+function drawLinks(){
+  const g=lanesEl.querySelector('svg.wlinks g'); if(!g) return; g.innerHTML='';
+  const box=lanesEl.getBoundingClientRect(); if(!box.width) return;
+  const icons=$$('.wstep .wic',lanesEl);
+  for(let i=1;i<icons.length;i++){
+    const a=icons[i-1].getBoundingClientRect(), b=icons[i].getBoundingClientRect();
+    const ax=a.right-box.left+3, ay=a.top+a.height/2-box.top, bx=b.left-box.left-5, by=b.top+b.height/2-box.top;
+    let d;
+    if(Math.abs(ay-by)<2){ d=`M${f1(ax)} ${f1(ay)} H${f1(bx)}`; }
+    else { const mx=(ax+bx)/2, dir=by>ay?1:-1, r=Math.min(10,Math.abs(by-ay)/2,(bx-ax)/2);
+      d=`M${f1(ax)} ${f1(ay)} H${f1(mx-r)} Q${f1(mx)} ${f1(ay)} ${f1(mx)} ${f1(ay+dir*r)} V${f1(by-dir*r)} Q${f1(mx)} ${f1(by)} ${f1(mx+r)} ${f1(by)} H${f1(bx)}`; }
+    const p=document.createElementNS(SVGNS,'path'); const done=i<=wI;
+    p.setAttribute('d',d); p.setAttribute('class','wl'+(done?' done':'')); p.setAttribute('marker-end',done?'url(#waOn)':'url(#wa)'); g.appendChild(p);
+  }
+}
+redrawers.push(drawLinks);
+$('#wPlay').addEventListener('click',()=>{
+  const n=WF[wfK].steps.length;
+  if(wPlaying){ stopW(); return; }
+  wPlaying=true; lanesEl.classList.add('playing'); $('#wPlayLbl').textContent='Pause';
+  if(wI>=n-1) wI=0; renderWStep();
+  wTimer=setInterval(()=>{ if(wI>=n-1){ stopW(); return; } wI++; renderWStep(); }, 2000);
+});
+$('#wPrev').addEventListener('click',()=>{ stopW(); if(wI>0){ wI--; renderWStep(); } });
+$('#wNext').addEventListener('click',()=>{ stopW(); if(wI<WF[wfK].steps.length-1){ wI++; renderWStep(); } });
+if('ResizeObserver' in window){ new ResizeObserver(()=>drawLinks()).observe(lanesEl); } else { window.addEventListener('resize', drawLinks); }
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+renderPersona(); renderWf();
+
+/* hero persona links */
+$('#who').innerHTML = Object.entries(PERSONAS).map(([k,p])=>`<a href="#workflows" data-k="${k}"><span class="av">${ic(p.ic)}</span><b>${p.n}</b><span>${p.goal}</span></a>`).join('');
+$$('#who a').forEach(a=>a.addEventListener('click',e=>{ setPersona(a.dataset.k); if(document.body.classList.contains('present')){ e.preventDefault(); go(slides.findIndex(s=>s.id==='workflows')); } }));
+
+/* ---------------- topology ---------------- */
+const TOPO = {
+  v2:{note:'Repository configuration. Live commissioning runs through approved applies.', vms:[
+    {vm:'1',id:'VM-01 · GitLab',spec:'4 vCPU · 8 GB · manager',labels:['role=manager','workload=gitlab'],svcs:[['git','GitLab CE 19.3.1','bootstrap'],['db','Bundled PostgreSQL + Redis','in GitLab'],['package','Container Registry','registry.${DOMAIN}'],['archive','Dedicated block volume','durable']]},
+    {vm:'2',id:'VM-02 · Platform',spec:'4 vCPU · 8 GB · manager',labels:['role=manager','workload=platform','persistence.platform-db=true'],svcs:[['route','Traefik','platform_ingress'],['sync','SwarmCD','swarmcd'],['portal','Backstage','platform_backstage'],['db','Central PostgreSQL','platform_database'],['key','Keycloak','platform_identity'],['shield','OAuth2 Proxy','platform_auth'],['metrics','Prometheus · Alertmanager','platform_obs'],['dashboard','Grafana · Loki · blackbox','platform_obs'],['eye','CrowdSec','platform_edge']]},
+    {vm:'3',id:'VM-03 · Apps',spec:'2 vCPU · 4 GB · manager',labels:['role=manager','workload=apps','runner=true'],svcs:[['gear','GitLab Runner','Docker executor'],['cubes','Golden-path services','platform_apps'],['network','Dev and test workloads','apps_net']]}
+  ], globals:['node-exporter','cAdvisor','Grafana Alloy']},
+  base:{note:'Last recorded deployment, 3 May 2026: Terraform added 28 resources and Swarm reported 5 ready nodes.', vms:[
+    {vm:'2',id:'swarm-mgr-1 … 3',spec:'3 managers · nbg1',labels:['role=manager'],svcs:[['swarm','Control plane','quorum'],['server','Pinned platform services','manager constraints'],['git','GitOps source at the time','GitHub']]},
+    {vm:'w',id:'worker-1 … 2',spec:'2 workers · nbg1',labels:['role=worker'],svcs:[['cubes','Application capacity','workers'],['metrics','Global collectors','all nodes']]},
+    {vm:'w',id:'SwarmCD-managed stacks',spec:'reconciled from Git',labels:[],svcs:[['route','platform_ingress','Traefik'],['shield','platform_auth','OAuth2 Proxy'],['portal','platform_backstage','Backstage'],['dashboard','platform_obs','observability'],['sync','swarmcd','reconciler']]}
+  ], globals:['node-exporter','cAdvisor','log collector']}
+};
+let topoV='v2';
+function renderTopo(){
+  const t=TOPO[topoV]; $('#topoNote').textContent=t.note;
+  $('#vms').innerHTML = t.vms.map(v=>`<article class="vm" data-vm="${v.vm}"><div class="vm-top"><span class="srv">${ic('server')}</span><span class="vm-id">${v.id}</span><span class="vm-spec">${v.spec}</span>${v.labels.length?`<div class="labels">${v.labels.map(l=>`<code>${l}</code>`).join('')}</div>`:''}</div><ul class="svc-list">${v.svcs.map(s=>`<li>${ic(s[0])}<span>${s[1]}</span><span>${s[2]}</span></li>`).join('')}</ul></article>`).join('');
+  $('#globals').innerHTML = `<span class="chip">${ic('swarm','style="width:14px;height:14px"')}Global on every node</span>${t.globals.map(g=>`<span>${g}</span>`).join('<span class="note">·</span>')}`;
+}
+$$('#topoSeg button').forEach(b=>b.addEventListener('click',()=>{ topoV=b.dataset.v; $$('#topoSeg button').forEach(x=>x.setAttribute('aria-pressed', String(x===b))); renderTopo(); }));
+renderTopo();
+
+/* ---------------- providers ---------------- */
+const PROV = {
+  hetzner:{n:'Hetzner Cloud',ic:'cloud',st:['ok','Reference'],d:'Original implementation. Load Balancer ingress, Hetzner Volumes, optional Packer Ready-To-Swarm snapshot.',ingress:'Hetzner Load Balancer',nodes:'private network, manager 1 also jumpbox'},
+  ovh:{n:'OVHcloud Public Cloud',ic:'cloud',st:['warn','Not yet proven'],d:'Independent deployment root. Private-only nodes. Repository-complete, awaiting a live plan.',ingress:'provider public endpoint',nodes:'private-only'},
+  proxmox:{n:'Proxmox VE',ic:'server',st:['warn','Not yet proven'],d:'Independent deployment root for on-premises hardware. Private-only nodes.',ingress:'routed or NAT address',nodes:'private-only'}
+};
+let prov='hetzner';
+const pc=$('#provCards');
+Object.entries(PROV).forEach(([k,p])=>{ const b=h('button',{class:'prov-card',type:'button','data-k':k,'aria-pressed':String(k===prov)},`<span class="t"><span>${ic(p.ic)}${p.n}</span><span class="chip ${p.st[0]}">${p.st[1]}</span></span><p>${p.d}</p>`); b.addEventListener('click',()=>{prov=k; $$('.prov-card').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderContract();}); pc.appendChild(b); });
+function renderContract(){
+  const p=PROV[prov];
+  $('#contract').innerHTML = `<span class="ct">${ic('layers')}local.infrastructure</span><pre><span class="k">managers</span> = { "1" = { name, private_ip, labels }, "2" = …, "3" = … }
+<span class="k">workers</span>  = { }   <span class="k"># none in v2</span>
+<span class="k">jumpbox.public_endpoint</span>  <span class="k"># ${p.nodes}</span>
+<span class="k">ingress.public_ipv4</span>      <span class="k"># ${p.ingress}</span>
+<span class="k">storage</span>   = stable block-device paths
+<span class="k">resource IDs</span> = diagnostic only</pre><span class="k">infra/deployments/${prov}/ · module.infra</span>`;
+}
+renderContract();
+
+/* ---------------- bootstrap ---------------- */
+const BOOT = [
+  ['infra','layers','Terraform apply','Creates VMs, private network, the ingress endpoint, volumes and Cloudflare DNS. Writes a versioned schema-v2 handoff with non-secret rendering inputs.'],
+  ['host','package','Controller bundle','The Ansible controller bundle lands on the jumpbox. Any imported task file must be listed in controller-bundle.yaml and pass its validator.'],
+  ['host','clipboard','Preflight and host readiness','Checks revision, inputs and host state before anything changes.'],
+  ['host','swarm','Initialize or join Swarm','Forms the three-manager control plane.'],
+  ['host','listcheck','Workload and persistence labels','workload=gitlab, platform and apps; persistence.platform-db=true; runner=true. These drive every placement constraint.'],
+  ['host','archive','Prepare durable storage','Mounts the stable block-device paths supplied by the provider contract.'],
+  ['host','network','Create overlay networks','public_net, platform_net, apps_net, metrics_net and the dedicated Backstage networks.'],
+  ['host','lock','Configs, secrets, runtime files','Canonical templates rendered with strict undefined-variable handling. A provenance manifest records checkout, input, template and output digests.'],
+  ['boot','route','Deploy platform ingress','Traefik as platform_ingress, once, so GitLab can be served over HTTPS. SwarmCD later reconciles the same stack name.'],
+  ['boot','git','Deploy GitLab and Registry','Bootstrap-managed GitLab CE on VM-01, because SwarmCD cannot read a repository that does not exist yet.'],
+  ['boot','gear','Register GitLab Runner','Docker-executor Runner on VM-03, registered with a token prepared during the approved apply.'],
+  ['gate','gate','Verify or supply images','Checks Registry artifacts and the current Backstage digest. If missing, triggers one image-supply pipeline and polls it. Fails closed rather than reconciling empty image paths.'],
+  ['gitops','sync','Deploy and configure SwarmCD','Points SwarmCD at the GitLab runtime repository with a read-only deploy token.'],
+  ['gitops','cubes','SwarmCD reconciles stacks','From here on, every platform and app stack is converged from Git.'],
+  ['gitops','check','Post-deploy checks and evidence','Verifies the final Docker config content and active consumers. Prepared content and observed runtime stay separate evidence.']
+];
+const bandName={infra:'Infrastructure',host:'Host and Swarm',boot:'Bootstrap-managed',gate:'Gate',gitops:'GitOps'};
+let bootI=11;
+const bs=$('#bootSteps');
+BOOT.forEach((s,i)=>{ const li=h('li',{class:s[0]==='gate'?'gate':''}); const b=h('button',{type:'button'},`<span class="num"><span>${String(i+1).padStart(2,'0')} · <span class="band" data-b="${s[0]}">${bandName[s[0]]}</span></span>${ic(s[1],`data-b="${s[0]}"`)}</span><span class="lbl">${s[2]}</span>`); b.addEventListener('click',()=>{bootI=i; renderBoot();}); li.appendChild(b); bs.appendChild(li); });
+function renderBoot(){
+  $$('li',bs).forEach((li,i)=>{ li.classList.toggle('done', i<bootI); li.classList.toggle('cur', i===bootI); });
+  const s=BOOT[bootI];
+  $('#bootDetail').innerHTML = `<div class="progress" aria-hidden="true"><i style="width:${((bootI+1)/BOOT.length*100).toFixed(1)}%"></i></div>
+    <span class="band" data-b="${s[0]}">Step ${bootI+1} of ${BOOT.length} · ${bandName[s[0]]}</span><h3>${s[2]}</h3><p style="font-size:15px">${s[3]}</p>
+    <div class="ctrl"><button class="btn" type="button" id="bPrev" ${bootI===0?'disabled':''}>← Previous</button><button class="btn primary" type="button" id="bNext" ${bootI===BOOT.length-1?'disabled':''}>Next →</button></div>`;
+  $('#bPrev').addEventListener('click',()=>{ if(bootI>0){bootI--; renderBoot();} });
+  $('#bNext').addEventListener('click',()=>{ if(bootI<BOOT.length-1){bootI++; renderBoot();} });
+}
+renderBoot();
+
+/* ---------------- golden path ---------------- */
+const P = [['laptop','Developer','person'],['portal','Backstage','portal'],['git','Service repo','GitLab'],['package','Registry','images'],['filecode','Promotion','trusted CI'],['form','Definition','apps/definitions'],['gear','Renderer','render-apps-stack.py'],['git','Runtime repo','GitLab branch'],['sync','SwarmCD','reconciler'],['swarm','Swarm','workload=apps']];
+const GP = [
+  [0,1,'Choose template and intent','The developer picks the service template and declares intent: name, resource profile, metrics path and exposure mode.'],
+  [1,2,'Create platform/services/<name>','Backstage scaffolds the repository in self-hosted GitLab using its dedicated group token.'],
+  [2,2,'Test, build, pin image','The generated GitLab CI pipeline runs on the VM-03 Runner and produces an immutable image.'],
+  [2,3,'Push immutable image','The image lands in the GitLab Registry and is referenced by sha256 digest from then on.'],
+  [2,4,'Request scoped promotion','The service pipeline can only ask, through a request-only trigger. It holds no GitOps write, Docker, SSH or Swarm credential.'],
+  [4,4,'Validate source, image, intent','Trusted platform CI checks the source project, the registry (derived from the GitLab host, not from trigger variables) and the intent.'],
+  [4,5,'Write SwarmService definition','The service definition is created or updated under environments/prod/apps/definitions.'],
+  [4,6,'Render platform_apps','The renderer applies placement, networks, labels, resource profiles and exposure rules.'],
+  [6,4,'Stack + metrics config','It returns one aggregate stack file and the Prometheus file-discovery targets.',true],
+  [4,7,'Commit and push','A restricted helper stages only the definition, stack.yml and apps file_sd.'],
+  [8,7,'Poll branch + compose_file','SwarmCD polls GitLab with its read-only deploy token. It never talks to the renderer.'],
+  [7,8,'Committed stack','The new revision of platform_apps is returned.',true],
+  [8,9,'Reconcile on workload=apps','Swarm rolls the service out on VM-03. Metrics and logs start flowing without extra work.']
+];
+const heads=$('#seqHeads'), rows=$('#seqRows'), seq=$('#seq');
+P.forEach(p=>heads.appendChild(h('div',{class:'seq-head'},`<span class="hi">${ic(p[0])}</span><b>${p[1]}</b><span>${p[2]}</span>`)));
+const lanes=h('div',{class:'seq-lanes seq-grid'}); P.forEach(()=>lanes.appendChild(h('div'))); rows.appendChild(lanes);
+let gpI=-1, gpTimer=null;
+GP.forEach((m,i)=>{
+  const [a,b,label,,resp]=m; const row=h('div',{class:'seq-row'+(resp?' resp':''),'data-i':i,role:'button',tabindex:'0','aria-label':`Step ${i+1}: ${label}`});
+  if(a===b){ row.appendChild(h('div',{class:'msg self',style:`grid-column:${a+1} / span 1`},`<span class="loopbox"></span><span class="txt"><i>${String(i+1).padStart(2,'0')}</i>${label}</span>`)); }
+  else { const lo=Math.min(a,b), hi=Math.max(a,b), n=hi-lo+1; const c=h('div',{class:'msg '+(b>a?'r':'l'),style:`grid-column:${lo+1} / span ${n}`}); const inset=`calc(100% / ${2*n})`; c.innerHTML=`<span class="line" style="left:${inset}; right:${inset}"></span><span class="txt" style="left:${inset}; right:${inset}"><i>${String(i+1).padStart(2,'0')}</i>${label}</span>`; row.appendChild(c); }
+  const pick=()=>{ stopGp(); gpI=i; renderGp(); };
+  row.addEventListener('click',pick); row.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } });
+  rows.appendChild(row);
+});
+function renderGp(){
+  seq.classList.toggle('playing', gpI>=0);
+  $$('.seq-row',rows).forEach((r,i)=>{ r.classList.toggle('cur', i===gpI); r.classList.toggle('past', gpI>=0 && i<gpI); });
+  $$('.seq-head',heads).forEach((hd,j)=>hd.classList.toggle('lit', gpI>=0 && (GP[gpI][0]===j || GP[gpI][1]===j)));
+  $('#gpCount').textContent = gpI>=0 ? `Step ${gpI+1} / ${GP.length}` : `${GP.length} messages`;
+  const cap=$('#gpCaption');
+  if(gpI<0) cap.innerHTML=`<span class="eyebrow">Overview</span><h3>Two pipelines, one trust boundary</h3><p style="font-size:14.5px">Steps 1–5 run with the developer's permissions. Steps 6–10 run in the platform's own pipeline. Steps 11–13 belong to SwarmCD. Press Play or click any message.</p>`;
+  else { const m=GP[gpI]; cap.innerHTML=`<span class="eyebrow">Step ${gpI+1} · ${P[m[0]][1]} → ${P[m[1]][1]}</span><h3>${m[2]}</h3><p style="font-size:14.5px">${m[3]}</p>`; }
+}
+function stopGp(){ if(gpTimer){ clearInterval(gpTimer); gpTimer=null; } $('#gpPlayLbl').textContent='Play'; }
+$('#gpPlay').addEventListener('click',()=>{
+  if(gpTimer){ stopGp(); return; }
+  if(gpI>=GP.length-1) gpI=-1;
+  gpI++; renderGp(); $('#gpPlayLbl').textContent='Pause';
+  gpTimer=setInterval(()=>{ if(gpI>=GP.length-1){ stopGp(); return; } gpI++; renderGp(); }, 2200);
+});
+$('#gpNext').addEventListener('click',()=>{ stopGp(); gpI=Math.min(GP.length-1,gpI+1); renderGp(); });
+$('#gpPrev').addEventListener('click',()=>{ stopGp(); gpI=Math.max(0,gpI-1); renderGp(); });
+$('#gpReset').addEventListener('click',()=>{ stopGp(); gpI=-1; renderGp(); });
+renderGp();
+
+/* ---------------- access ---------------- */
+const ACC = {
+  ui:{label:'Platform UI',ic:'portal',hops:[['user','Browser','person'],['cloud','Cloudflare DNS','lookup only'],['lb','Ingress endpoint','LB / routed IP'],['route','Traefik','TLS, websecure'],['shield','OAuth2 Proxy','ForwardAuth',1],['key','Keycloak','OIDC + group',1],['dashboard','Backstage, Grafana…','protected UI']],
+    note:'<h3>Group-gated single sign-on</h3><p class="note" style="margin-top:6px">Backstage, Grafana, Prometheus, SwarmCD and the Traefik dashboard all sit behind the same ForwardAuth chain. Traefik asks OAuth2 Proxy before forwarding, and OAuth2 Proxy asks Keycloak.</p>'},
+  gitlab:{label:'GitLab in a browser',ic:'git',hops:[['user','Browser','person'],['cloud','Cloudflare DNS','lookup only'],['lb','Ingress endpoint','LB / routed IP'],['route','Traefik','TLS, host route'],['git','GitLab web UI','VM-01',1],['key','Keycloak','native OIDC',1]],
+    note:'<h3>GitLab logs users in itself</h3><p class="note" style="margin-top:6px">GitLab is deliberately not behind OAuth2 Proxy. Its own OIDC integration talks to Keycloak, so one identity covers both the portal and source control.</p>'},
+  machine:{label:'Git, API, Registry, Runner',ic:'terminal',hops:[['terminal','Git / API client','token holder'],['cloud','Cloudflare DNS','lookup only'],['lb','Ingress endpoint','LB / routed IP'],['route','Traefik','TLS, host route'],['git','GitLab','native credential',1]],
+    note:'<h3>No interactive challenge for machines</h3><p class="note" style="margin-top:6px">Clone, push, API calls, Runner jobs and Registry pulls use personal, project, deploy or runner tokens. Putting them behind a browser login would break them, so they never are.</p>'},
+  app:{label:'Golden-path app',ic:'cubes',hops:[['user','Browser','person'],['route','Traefik','public_net'],['shield','OAuth2 Proxy','authenticated-web',1],['cubes','App on VM-03','platform_apps']],
+    note:'<h3>Exposure is chosen in the service intent</h3><p class="note" style="margin-top:6px"><b>authenticated-web</b> gets public HTTPS plus SSO. <b>internal</b> gets no Traefik route at all and is reachable only on apps_net. A developer-VPN profile and an anonymous public profile are future options, not current renderer behaviour.</p>'},
+  ops:{label:'Platform engineer',ic:'tool',hops:[['tool','Engineer','person'],['terminal','Jumpbox','jumpbox.public_endpoint',1],['server','Swarm managers','private addresses']],
+    note:'<h3>A separate path for admin and recovery</h3><p class="note" style="margin-top:6px">SSH reaches managers only through the jumpbox endpoint from the provider contract. Break-glass identity procedures exist for when Keycloak itself is down.</p>'}
+};
+let accK='ui'; const accSeg=$('#accessSeg');
+Object.entries(ACC).forEach(([k,a])=>{ const b=h('button',{type:'button','data-k':k,'aria-pressed':String(k===accK)},ic(a.ic)+a.label); b.addEventListener('click',()=>{accK=k; $$('button',accSeg).forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderAcc();}); accSeg.appendChild(b); });
+function renderAcc(){
+  const a=ACC[accK];
+  $('#hops').innerHTML = a.hops.map((x,i)=>`${i?'<span class="hop-arrow" aria-hidden="true">→</span>':''}<div class="hop${x[3]?' key':''}"><span class="hi">${ic(x[0])}</span><b>${x[1]}</b><span>${x[2]}</span></div>`).join('');
+  $('#accessNote').innerHTML = a.note;
+}
+renderAcc();
+
+/* ---------------- network matrix ---------------- */
+const NETS = [
+  ['public_net','Backend overlay that Traefik uses to reach routed services. It is not an exposure mechanism: only Traefik publishes host ports 80 and 443.'],
+  ['platform_net','Internal platform plane. Identity, GitLab, the database, SwarmCD, CrowdSec and the observability stack talk here.'],
+  ['apps_net','Where golden-path services live. Apps with internal exposure are reachable only from here.'],
+  ['metrics_net','Lets Prometheus scrape application metrics without joining the app network to the platform plane.'],
+  ['backstage_ingress_net','Dedicated link between Traefik and Backstage, so Backstage stays off the general backend overlay.'],
+  ['backstage_db_net','Dedicated link between Backstage and PostgreSQL. Backstage never joins platform_net.']
+];
+const SVCN = [
+  ['route','Traefik','2',[0,1,4]],['shield','OAuth2 Proxy','2',[0,1]],['key','Keycloak','2',[0,1]],['git','GitLab CE','1',[0,1]],['gear','GitLab Runner','3',[1]],
+  ['portal','Backstage','2',[4,5]],['db','Central PostgreSQL','2',[1,5]],['sync','SwarmCD','2',[1]],['eye','CrowdSec','2',[1]],
+  ['metrics','Prometheus','2',[0,1,3]],['dashboard','Grafana','2',[0,1]],['bell','Alertmanager · Loki · blackbox','2',[1]],['swarm','Alloy · node-exporter · cAdvisor','g',[1]],['cubes','platform_apps services','3',[0,2,3]]
+];
+let netSel=-1; const mx=$('#matrix');
+function renderMatrix(){
+  mx.innerHTML = `<thead><tr><th>Service</th>${NETS.map((n,j)=>`<th class="net${j===netSel?' sel':''}"><button type="button" data-j="${j}" aria-pressed="${j===netSel}">${n[0]}</button></th>`).join('')}</tr></thead>
+  <tbody>${SVCN.map(s=>`<tr class="${netSel>=0 && !s[3].includes(netSel)?'dim':''}"><td class="svc" data-vm="${s[2]}">${ic(s[0])}${s[1]}</td>${NETS.map((n,j)=>`<td class="c${j===netSel?' sel':''}">${s[3].includes(j)?'<i aria-label="attached"></i>':''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $$('th.net button',mx).forEach(b=>b.addEventListener('click',()=>{ const j=+b.dataset.j; netSel = netSel===j?-1:j; renderMatrix(); }));
+  $('#netNote').innerHTML = netSel>=0 ? `<b><code>${NETS[netSel][0]}</code></b> · ${NETS[netSel][1]}` : '<span class="note">Select a network name in the header. Backstage has its own two networks and never joins platform_net. Prometheus reaches apps over metrics_net, not apps_net.</span>';
+}
+renderMatrix();
+
+/* ---------------- observability ---------------- */
+const SIG=[
+  ['metrics','Metrics',[['cubes','App /metrics','file_sd'],['server','node-exporter, cAdvisor','global'],['route','Traefik metrics','VM-02'],['globe','Blackbox probes','synthetic']],[['metrics','Prometheus','Docker DNS discovery']]],
+  ['logs','Logs',[['cubes','Container stdout / stderr','all services'],['server','Node logs','all nodes'],['swarm','Grafana Alloy','global agent']],[['logs','Loki','VM-02']]],
+  ['bell','Alerts and dashboards',[['filecode','Recording and alert rules','versioned'],['bell','Alertmanager','VM-02']],[['mail','Notifications','email, opt-in'],['dashboard','Grafana dashboards','provisioned']]]
+];
+$('#signals').innerHTML = SIG.map(s=>`<div class="signal"><div class="sh">${ic(s[0])}<h3>${s[1]}</h3></div><div class="flowcol">${s[2].map(f=>`<div class="f">${ic(f[0])}<b style="font-weight:500">${f[1]}</b><span>${f[2]}</span></div>`).join('')}<div class="down">↓</div>${s[3].map(f=>`<div class="f dest">${ic(f[0])}<b style="font-weight:600">${f[1]}</b><span>${f[2]}</span></div>`).join('')}</div></div>`).join('');
+
+/* ---------------- release ---------------- */
+const DOM = ['Core contracts','GitLab / bootstrap','Ansible / Terraform / Packer','Backstage','Observability','Backup / restore'];
+const SRC = ['Pull request','Path classifier','Domain checks','Validation gate','Merge to main','Publish snapshot'];
+const RT = ['Terraform apply','Ansible commissioning','Service pipeline','Trusted promotion','Runtime branch','SwarmCD','Swarm'];
+const CH = {
+  docs:{label:'Docs only',dom:[0],src:[0,1,2,3,4],rt:[],vs:'Core contract and documentation-link checks run.',vr:'Nothing to promote. A documentation-only merge need not change the runtime.'},
+  stack:{label:'Platform stack YAML',dom:[0,4],src:[0,1,2,3,4,5],rt:[1,4,5,6],vs:'Core plus the owning domain, here observability.',vr:'Commissioning promotes the verified snapshot into the GitLab runtime branch. SwarmCD picks it up on its next poll.'},
+  infra:{label:'Terraform or provider',dom:[0,2],src:[0,1,2,3,4,5],rt:[0,1,4,5,6],vs:'Core plus the Ansible, Terraform and Packer domain.',vr:'A reviewed Terraform apply refreshes the versioned handoff, then separately authorized Ansible commissioning renders and verifies runtime config.'},
+  backstage:{label:'Backstage app',dom:[0,3],src:[0,1,2,3,4,5],rt:[1,4,5,6],vs:'Core plus the Backstage domain. Digest verification runs in its own workflow.',vr:'GitLab CI rebuilds the image when the source revision changes, the digest is pinned, and commissioning promotes the new reference.'},
+  service:{label:'New golden-path service',dom:[],src:[],rt:[2,3,4,5,6],vs:'No GitHub pull request is involved. The service repository lives in GitLab.',vr:'The service pipeline requests promotion, trusted CI renders platform_apps and commits it, and SwarmCD reconciles it on VM-03.'},
+  unknown:{label:'Workflow or unknown path',dom:[0,1,2,3,4,5],src:[0,1,2,3,4],rt:[],vs:'Fails open: unknown paths, classifier or workflow changes run the full suite.',vr:'Runtime impact depends on the files. The classifier selects domains; it never executes changed files.'}
+};
+let chK='stack'; const chSeg=$('#changeSeg');
+Object.entries(CH).forEach(([k,c])=>{ const b=h('button',{type:'button','data-k':k,'aria-pressed':String(k===chK)},c.label); b.addEventListener('click',()=>{chK=k; $$('button',chSeg).forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderRel();}); chSeg.appendChild(b); });
+const stageHtml=(arr,on)=>arr.map((s,i)=>`${i?'<span class="ar" aria-hidden="true">→</span>':''}<span class="s${on.includes(i)?' on':''}">${s}</span>`).join('');
+function renderRel(){
+  const c=CH[chK];
+  $('#srcStage').innerHTML=stageHtml(SRC,c.src); $('#rtStage').innerHTML=stageHtml(RT,c.rt);
+  $('#domains').innerHTML=DOM.map((d,i)=>`<span class="chip${c.dom.includes(i)?' on':''}">${d}</span>`).join('');
+  $('#vSource').innerHTML=`<span class="eyebrow">Checks</span><p style="font-size:14.5px">${c.vs}</p>`;
+  $('#vRuntime').innerHTML=`<span class="eyebrow">Reaching production</span><p style="font-size:14.5px">${c.vr}</p>`;
+}
+renderRel();
+
+/* ---------------- roadmap ---------------- */
+const ROAD = [
+  [0,'Stabilize the sovereign baseline','ok','Validation, Terraform backend initialization and Packer validation are green; active versus legacy docs are unambiguous.'],
+  [1,'Reduce to three managers','ok','Terraform examples, validation and Ansible labels describe three managers with platform DB persistence on VM-02.'],
+  [2,'Make placement deterministic','ok','Platform services and the ingress target pinned to VM-02, GitLab to VM-01, Runner to VM-03; collectors global.'],
+  [3,'Add GitLab CE','ok','HTTPS GitLab CE on VM-01 with durable storage, native Keycloak OIDC, limits, probes, alerts and a backup runbook.'],
+  [4,'Add GitLab Runner','ok','Non-privileged Docker-executor Runner pinned to VM-03 with registration automation, metrics and a CI proof definition.'],
+  [5,'Move GitOps to GitLab','ok','SwarmCD targets GitLab HTTPS with a read token, bootstrap and preflight automation, tests and a rollback runbook.'],
+  [6,'Integrate Backstage with GitLab','ok','Catalog discovery and scaffolding use self-hosted GitLab with a dedicated group token.'],
+  [7,'Consolidate image supply','ok','GitLab Registry owns image supply at registry.${DOMAIN} with CI → digest → GitOps wiring and a rollback runbook.'],
+  [8,'Finalize identity','ok','Keycloak + OAuth2 Proxy for platform UIs; GitLab browser SSO through native OIDC (ADR 0021).'],
+  [9,'Harden observability and access','ok','Public HTTP(S) scoped to the platform node, Docker-DNS discovery, Alloy logs, no Docker socket in Prometheus or Alloy (ADR 0022).'],
+  [10,'Prove backup and disaster recovery','warn','Terraform, Ansible, GitLab, SwarmCD, PostgreSQL, identity, secrets source and platform config have a documented restore exercise.'],
+  [11,'Deliver developer experience','warn','A developer creates and deploys a simple service through Backstage with no manual infrastructure work. First-service promotion is being hardened now.']
+];
+const road=$('#road');
+ROAD.forEach(r=>{ const li=h('li',{tabindex:'0',role:'button','aria-expanded':String(r[0]===11)},`<div class="ph"><b>${String(r[0]).padStart(2,'0')}</b><span class="chip ${r[2]}"><span class="dot"></span>${r[2]==='ok'?'Repo complete':'In progress'}</span></div><span class="goal">${r[1]}</span><span class="done-when">${r[3]}</span>`); const t=()=>li.setAttribute('aria-expanded', String(li.getAttribute('aria-expanded')!=='true')); li.addEventListener('click',t); li.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault(); t();} }); road.appendChild(li); });
+
+/* ---------------- ADRs ---------------- */
+const ADR = [
+  ['0001','Architect routing and ADR boundary','Accepted','Architect-led pushback, optional design review, docs/adr as the ADR scope.'],
+  ['0002','Platform hosting model','Accepted','Hetzner plus Docker Swarm baseline, manager quorum target and placement assumptions.'],
+  ['0003','GitOps delivery with SwarmCD','Accepted','SwarmCD reconciles stack deployment and updates.'],
+  ['0004','Ingress and auth boundary','Accepted','Traefik and OAuth2 Proxy trust boundary.'],
+  ['0005','Network segmentation and service placement','Accepted','public_net and platform_net boundary and the core placement model.'],
+  ['0006','Secret and config lifecycle','Accepted','Terraform → Ansible → SwarmCD delivery path and rotation contract.'],
+  ['0007','Identity strategy deferral','Superseded','Replaced by 0018.'],
+  ['0008','Observability stack shape','Accepted','LGTM-style stack, manager and global placement split, ingress posture.'],
+  ['0009','Image mirroring and digest pinning','Superseded','Replaced by 0015.'],
+  ['0010','Backup strategy and provider model','Superseded','Replaced by 0014.'],
+  ['0011','Use Backstage as the developer portal','Accepted','Backstage is the standard portal integration surface.'],
+  ['0012','Sovereign IDP vertical slice roadmap','Proposed','Zero-Azure MVP, vertical-slice delivery rules and readiness gates.'],
+  ['0013','Sovereign Terraform state backend','Accepted','S3-compatible state with lockfile locking replaces AzureRM.'],
+  ['0014','Sovereign platform backups','Accepted','Hetzner Object Storage as primary MVP backup target.'],
+  ['0015','Private image supply','Accepted','Self-hosted registry with digest-pinned references.'],
+  ['0016','Ready-To-Swarm image','Accepted','Opt-in Packer-built snapshot for Docker-ready nodes.'],
+  ['0017','Swarm-compatible durable persistence','Accepted','Provider volume plus Swarm node pinning.'],
+  ['0018','Sovereign Keycloak login path','Superseded','Historical opt-in Keycloak path; finalized by 0021.'],
+  ['0019','Central platform Postgres','Accepted','One internal platform_database for Backstage and Keycloak.'],
+  ['0020','Three-node GitLab-centered IDP v2 target','Proposed','Three-manager topology, GitLab bootstrap boundary and migration sequence.'],
+  ['0021','Sovereign identity finalization','Accepted','Keycloak + OAuth2 Proxy, GitLab native OIDC.'],
+  ['0022','Runtime security and observability hardening','Accepted','Narrower host exposure, no Prometheus Docker API access, Alloy logs.'],
+  ['0023','Backup and disaster recovery','Accepted','Encrypted, node-local, application-consistent backups and recovery boundaries.'],
+  ['0024','Golden-path service delivery','Accepted','Constrained intent, aggregate reconciliation, request-only GitOps promotion.'],
+  ['0024','Multi-provider infrastructure contract','Accepted','Provider modules behind a normalized contract with separate deployment states.']
+];
+let adrF='All'; const adrSeg=$('#adrSeg');
+['All','Accepted','Proposed','Superseded'].forEach(s=>{ const n = s==='All'?ADR.length:ADR.filter(a=>a[2]===s).length; const b=h('button',{type:'button','data-s':s,'aria-pressed':String(s===adrF)},`${s} <span class="mono" style="opacity:.6">${n}</span>`); b.addEventListener('click',()=>{adrF=s; $$('button',adrSeg).forEach(x=>x.setAttribute('aria-pressed',String(x===b))); renderAdr();}); adrSeg.appendChild(b); });
+const stCls={Accepted:'ok',Proposed:'warn',Superseded:'off'};
+function renderAdr(){
+  const q=$('#adrQ').value.trim().toLowerCase();
+  const list=ADR.filter(a=>(adrF==='All'||a[2]===adrF) && (!q || (a.join(' ').toLowerCase().includes(q))));
+  $('#adrList').innerHTML = list.length ? list.map(a=>`<div class="adr${a[2]==='Superseded'?' sup':''}"><span class="no">${a[0]}</span><span class="ti">${a[1]}</span><span class="chip ${stCls[a[2]]}">${a[2]}</span><span class="nt">${a[3]}</span></div>`).join('') : '<p class="adr-empty">No decision matches that search. Try a broader word such as "backup" or "identity".</p>';
+}
+$('#adrQ').addEventListener('input',renderAdr);
+renderAdr();
+
+/* ---------------- portability ---------------- */
+const PORT=[['SwarmCD','Argo CD / Flux'],['Swarm services','Deployments / StatefulSets'],['Swarm configs','ConfigMaps'],['Swarm secrets','Secrets / External Secrets'],['Placement constraints','Affinity / node selectors'],['Traefik on Swarm','Traefik on Kubernetes / Gateway API'],['Global services','DaemonSets'],['Provider volume','CSI PersistentVolume'],['GitLab Runner','Kubernetes Runner'],['Prometheus stack','Prometheus Operator']];
+$('#portRows').innerHTML = PORT.map(p=>`<div><span>${p[0]}</span><span aria-hidden="true">→</span><span>${p[1]}</span></div>`).join('');
+
+/* ---------------- presenter mode ---------------- */
+let cur=0; const pbar=$('#pbar');
+function go(i){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,j)=>s.classList.toggle('current', j===cur));
+  navLinks.forEach((a,j)=>a.classList.toggle('active', j===cur));
+  $('#pCount').textContent=`${cur+1} / ${slides.length}`;
+  $('#pProg').style.width=((cur+1)/slides.length*100)+'%';
+  window.scrollTo(0,0);
+  redrawAll();
+}
+function startPresent(){
+  const y=window.scrollY+window.innerHeight*.3; let idx=0; slides.forEach((s,j)=>{ if(s.offsetTop<=y) idx=j; });
+  document.body.classList.add('present'); pbar.hidden=false; $('#presentBtn').setAttribute('aria-pressed','true'); go(idx);
+  if(document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(()=>{}); }
+}
+function stopPresent(){
+  document.body.classList.remove('present'); pbar.hidden=true; $('#presentBtn').setAttribute('aria-pressed','false');
+  slides.forEach(s=>s.classList.remove('current'));
+  if(document.fullscreenElement && document.exitFullscreen){ document.exitFullscreen().catch(()=>{}); }
+  const s=slides[cur]; requestAnimationFrame(()=>{ s.scrollIntoView({block:'start'}); redrawAll(); });
+}
+$('#presentBtn').addEventListener('click',()=> document.body.classList.contains('present') ? stopPresent() : startPresent());
+$('#pPrev').addEventListener('click',()=>go(cur-1)); $('#pNext').addEventListener('click',()=>go(cur+1)); $('#pExit').addEventListener('click',stopPresent);
+document.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea') return;
+  const present=document.body.classList.contains('present');
+  if(!present){ if((e.key==='p'||e.key==='P') && !e.metaKey && !e.ctrlKey && !e.altKey){ startPresent(); } return; }
+  if(['ArrowRight','PageDown'].includes(e.key)){ e.preventDefault(); go(cur+1); }
+  else if(['ArrowLeft','PageUp'].includes(e.key)){ e.preventDefault(); go(cur-1); }
+  else if(e.key==='Home'){ go(0); } else if(e.key==='End'){ go(slides.length-1); }
+  else if(e.key==='Escape'){ stopPresent(); }
+});
+document.addEventListener('fullscreenchange',redrawAll);
+window.addEventListener('resize',redrawAll);
+
+applyTheme();
+})();
+</script>
+
+</body></html>
