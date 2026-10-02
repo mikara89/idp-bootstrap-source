@@ -17,6 +17,7 @@ default:
 # shared Runner remains the compatible default until Ansible has registered a
 # healthy `builder` Runner and an operator changes this protected variable.
 variables:
+  GET_SOURCES_ATTEMPTS: "3"
   IDP_BUILD_RUNNER_TAG: "vm03"
 
 workflow:

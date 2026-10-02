@@ -6,6 +6,7 @@ default:
     - idp
     - vm03
 variables:
+  GET_SOURCES_ATTEMPTS: "3"
   # Retain the shared Runner until platform operators register and select the
   # optional isolated builder Runner through a protected CI variable.
   IDP_BUILD_RUNNER_TAG: "vm03"
