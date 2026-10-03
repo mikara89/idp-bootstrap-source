@@ -3,6 +3,7 @@
 This repository is a generated bootstrap snapshot and credential-free bootstrap distribution.
 
 - The private `mikara89/idp-docker-stack` repository is the development source of truth.
+- `index.html` is the generated visual IDP/platform guide from the private development source.
 - This public repository exists to distribute verified bootstrap snapshots and bootstrap self-hosted GitLab.
 - It is installation media, not a development or runtime repository, and must not become a Git submodule.
 - It must contain no credentials.
