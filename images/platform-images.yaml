@@ -45,6 +45,10 @@ images:
     source: crowdsecurity/crowdsec:v1.7.7
     target: crowdsec:v1.7.7
     digest: sha256:6ca53ad26196ca59ddd4fa692a586b73d8fcde085046163b9ca2f04887dca563
+  - name: openbao
+    source: ghcr.io/openbao/openbao:2.7.1
+    target: openbao:2.7.1
+    digest: sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
   - name: postgres
     source: postgres:16-alpine
     target: postgres:16-alpine

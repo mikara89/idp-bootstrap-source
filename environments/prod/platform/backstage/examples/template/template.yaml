@@ -44,17 +44,25 @@ spec:
         runtimeEnvironment:
           title: Non-secret environment settings
           type: object
+          maxProperties: 8
+          propertyNames:
+            maxLength: 48
+            pattern: '^(?!.*(?:SECRET|PASSWORD|TOKEN|PRIVATE_KEY|API_KEY))(?!PORT$|HEALTH_PATH$|READINESS_PATH$|METRICS_PATH$)[A-Z][A-Z0-9_]{0,47}(?![\s\S])'
           additionalProperties:
             type: string
+            maxLength: 64
+            pattern: '^[\x20-\x21\x23\x25-\x26\x28-\x5B\x5D-\x5F\x61-\x7E]*(?![\s\S])'
           default: {}
-          description: Values are committed to the platform runtime repository. Never enter passwords, tokens, or private keys.
+          description: Up to 8 non-secret settings. Names are uppercase and at most 48 characters; values are at most 64 simple ASCII characters. Never enter passwords, tokens, or private keys.
         secretReferences:
           title: Approved secret references
           type: array
+          maxItems: 8
           uniqueItems: true
           items:
             type: string
-            enum: [database-url, api-key, oauth-client-secret]
+            maxLength: 64
+            pattern: '^(database-url|api-key|oauth-client-secret)(-v[1-9][0-9]*)?(?![\s\S])'
           default: []
     - title: GitLab repository
       required: [repoUrl]

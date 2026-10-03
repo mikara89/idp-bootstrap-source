@@ -1,3 +1,73 @@
+spec:
+  inputs:
+    mode:
+      description: Selects the trusted pipeline operation.
+      type: string
+      options: [default, golden-path, bootstrap-image-supply]
+      default: default
+    golden_path_service:
+      description: Golden Path service name.
+      type: string
+      regex: '^([a-z0-9-]+)?$'
+      default: ''
+    golden_path_project:
+      description: Golden Path service project path.
+      type: string
+      regex: '^(platform/services/[a-z0-9-]+)?$'
+      default: ''
+    golden_path_image:
+      description: Digest-pinned image from the trusted service registry.
+      type: string
+      regex: '^(registry\.[a-z0-9.-]+/platform/services/[a-z0-9-]+@sha256:[a-f0-9]{64})?$'
+      default: ''
+    golden_path_port:
+      description: Service HTTP port.
+      type: string
+      regex: '^[1-9][0-9]{0,4}$'
+      default: '3000'
+    golden_path_exposure:
+      description: Requested service exposure mode.
+      type: string
+      options: [internal, authenticated-web]
+      default: internal
+    golden_path_owner:
+      description: Backstage owner entity.
+      type: string
+      regex: '^((group|user):[a-z0-9][a-z0-9._/-]*)$'
+      default: 'group:default/platform-team'
+    golden_path_profile:
+      description: Requested resource profile.
+      type: string
+      options: [small, medium]
+      default: small
+    golden_path_env_json:
+      description: JSON object containing non-secret runtime environment values.
+      type: string
+      default: '{}'
+    golden_path_secret_refs_json:
+      description: JSON array of approved runtime secret references.
+      type: string
+      default: '[]'
+    golden_path_source_revision:
+      description: Full service source commit revision used for promotion metadata.
+      type: string
+      regex: '^([a-f0-9]{40,64})?$'
+      default: ''
+    bootstrap_backstage_required:
+      description: Whether the Backstage image must be built and pinned.
+      type: boolean
+      default: false
+    bootstrap_missing_platform_images:
+      description: Comma-separated platform image aliases to mirror.
+      type: string
+      regex: '^([a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*)?$'
+      default: ''
+    bootstrap_backstage_source_revision:
+      description: Authoritative Backstage source revision to build.
+      type: string
+      regex: '^([a-f0-9]{40,64})?$'
+      default: ''
+---
 stages:
   - validate
   - test
@@ -22,9 +92,10 @@ variables:
 
 workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "trigger" && $GOLDEN_PATH_SERVICE'
-    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
-    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "golden-path" && "$[[ inputs.golden_path_service ]]" != ""'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && $[[ inputs.bootstrap_backstage_required ]] == true'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && "$[[ inputs.bootstrap_missing_platform_images ]]" != ""'
+    - if: '($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule") && "$[[ inputs.mode ]]" == "default"'
     - when: never
 
 validate-platform:
@@ -33,7 +104,7 @@ validate-platform:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+    - if: '"$[[ inputs.mode ]]" != "default"'
       when: never
     - when: on_success
   before_script:
@@ -49,7 +120,7 @@ backstage-build:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+    - if: '"$[[ inputs.mode ]]" != "default"'
       when: never
     - when: on_success
   before_script:
@@ -66,15 +137,15 @@ runner-smoke:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$PLATFORM_PIPELINE_MODE == "bootstrap-image-supply"'
+    - if: '"$[[ inputs.mode ]]" != "default"'
       when: never
     - when: on_success
   script:
     - echo "Runner is executing a GitLab CI job"
     - uname -a
 
-# Dedicated first-boot image supply. CI_PIPELINE_SOURCE=api is required so a
-# Golden Path service trigger cannot activate these jobs.
+# Dedicated first-boot image supply. It uses the authenticated pipeline API
+# source, while Golden Path requests use trigger-token provenance.
 build-backstage-image:
   stage: image
   timeout: 2h
@@ -89,6 +160,12 @@ build-backstage-image:
     name: quay.io/buildah/stable:v1.39.0
     entrypoint: [""]
   variables:
+    BOOTSTRAP_BACKSTAGE_REQUIRED:
+      value: "$[[ inputs.bootstrap_backstage_required ]]"
+      expand: false
+    BOOTSTRAP_BACKSTAGE_SOURCE_REVISION:
+      value: "$[[ inputs.bootstrap_backstage_source_revision ]]"
+      expand: false
     # Rootless Buildah stores layers through fuse-overlayfs. VFS is rejected for
     # these builds: live commissioning measured >30 GB transient layer
     # amplification for the Backstage dependency tree and exhausted the VM3 root
@@ -123,7 +200,7 @@ build-backstage-image:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_BACKSTAGE_REQUIRED == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && $[[ inputs.bootstrap_backstage_required ]] == true'
     - when: never
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
@@ -167,10 +244,14 @@ mirror-platform-images:
   image:
     name: quay.io/skopeo/stable:v1.17.0
     entrypoint: [""]
+  variables:
+    BOOTSTRAP_MISSING_PLATFORM_IMAGES:
+      value: "$[[ inputs.bootstrap_missing_platform_images ]]"
+      expand: false
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_MISSING_PLATFORM_IMAGES'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && "$[[ inputs.bootstrap_missing_platform_images ]]" != ""'
       when: on_success
     - when: never
   before_script:
@@ -208,10 +289,14 @@ update-backstage-digest:
     name: alpine/git:2.47.2
     entrypoint: [""]
   needs: [build-backstage-image]
+  variables:
+    BOOTSTRAP_BACKSTAGE_SOURCE_REVISION:
+      value: "$[[ inputs.bootstrap_backstage_source_revision ]]"
+      expand: false
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "api" && $PLATFORM_PIPELINE_MODE == "bootstrap-image-supply" && $BOOTSTRAP_BACKSTAGE_REQUIRED == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && $[[ inputs.bootstrap_backstage_required ]] == true'
     - when: never
   script:
     - test -n "$BACKSTAGE_IMAGE_DIGEST"
@@ -222,9 +307,9 @@ update-backstage-digest:
     - test "$BACKSTAGE_IMAGE_SOURCE_REVISION" = "$BOOTSTRAP_BACKSTAGE_SOURCE_REVISION"
     - git config user.name "IDP GitLab CI"
     - git config user.email "idp-ci@local"
-    - git fetch origin "$CI_COMMIT_BRANCH"
-    - test "$(git rev-parse "origin/$CI_COMMIT_BRANCH")" = "$CI_COMMIT_SHA"
-    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    - git fetch origin "$CI_DEFAULT_BRANCH"
+    - test "$(git rev-parse "origin/$CI_DEFAULT_BRANCH")" = "$CI_COMMIT_SHA"
+    - git checkout -B "$CI_DEFAULT_BRANCH" "origin/$CI_DEFAULT_BRANCH"
     - printf '%s\n' '#!/bin/sh' 'case "$1" in *Username*) printf "%s" gitlab-ci-token ;; *) printf "%s" "$CI_JOB_TOKEN" ;; esac' > /tmp/git-askpass
     - chmod 700 /tmp/git-askpass
     - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
@@ -238,21 +323,50 @@ update-backstage-digest:
     - >-
       git diff --cached --quiet ||
       git commit -m "chore(images): update Backstage digest [skip ci]"
-    - git push origin "HEAD:$CI_COMMIT_BRANCH"
+    - git push origin "HEAD:$CI_DEFAULT_BRANCH"
 
 golden-path-update:
   stage: gitops
   image: alpine:3.22
   variables:
     PYTHONDONTWRITEBYTECODE: "1"
+    GOLDEN_PATH_SERVICE:
+      value: "$[[ inputs.golden_path_service ]]"
+      expand: false
+    GOLDEN_PATH_PROJECT:
+      value: "$[[ inputs.golden_path_project ]]"
+      expand: false
+    GOLDEN_PATH_IMAGE:
+      value: "$[[ inputs.golden_path_image ]]"
+      expand: false
+    GOLDEN_PATH_PORT:
+      value: "$[[ inputs.golden_path_port ]]"
+      expand: false
+    GOLDEN_PATH_EXPOSURE:
+      value: "$[[ inputs.golden_path_exposure ]]"
+      expand: false
+    GOLDEN_PATH_OWNER:
+      value: "$[[ inputs.golden_path_owner ]]"
+      expand: false
+    GOLDEN_PATH_PROFILE:
+      value: "$[[ inputs.golden_path_profile ]]"
+      expand: false
+    GOLDEN_PATH_ENV_JSON:
+      value: "$[[ inputs.golden_path_env_json ]]"
+      expand: false
+    GOLDEN_PATH_SECRET_REFS_JSON:
+      value: "$[[ inputs.golden_path_secret_refs_json ]]"
+      expand: false
+    GOLDEN_PATH_SOURCE_SHA:
+      value: "$[[ inputs.golden_path_source_revision ]]"
+      expand: false
   resource_group: golden-path-definitions
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "trigger" && $GOLDEN_PATH_SERVICE'
+    - if: '$CI_PIPELINE_SOURCE == "trigger" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "golden-path" && "$[[ inputs.golden_path_service ]]" != ""'
   before_script:
     - apk add --no-cache git python3 py3-yaml
   script:
-    - test -n "$PLATFORM_GITOPS_BRANCH"
-    - test "$CI_COMMIT_BRANCH" = "$PLATFORM_GITOPS_BRANCH"
+    - test "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH"
     - echo "$GOLDEN_PATH_SERVICE" | grep -Ex '[a-z0-9-]+'
     - echo "$GOLDEN_PATH_PROJECT" | grep -Ex "platform/services/$GOLDEN_PATH_SERVICE"
     - export TRUSTED_REGISTRY="registry.${CI_SERVER_HOST#gitlab.}"
@@ -265,8 +379,8 @@ golden-path-update:
     - echo "$GOLDEN_PATH_SOURCE_SHA" | grep -E '^[a-f0-9]{40,64}$'
     - git config user.name "IDP GitLab CI"
     - git config user.email "idp-ci@local"
-    - git fetch origin "$CI_COMMIT_BRANCH"
-    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    - git fetch origin "$CI_DEFAULT_BRANCH"
+    - git checkout -B "$CI_DEFAULT_BRANCH" "origin/$CI_DEFAULT_BRANCH"
     - python3 scripts/golden-path-promote.py
     - python3 scripts/render-apps-stack.py --registry "$TRUSTED_REGISTRY"
     - python3 -c "import yaml; yaml.safe_load(open('environments/prod/apps/stack.yml')); yaml.safe_load(open('environments/prod/platform/observability/config/file_sd/apps.yml'))"
@@ -275,4 +389,4 @@ golden-path-update:
     - printf '%s\n' '#!/bin/sh' 'case "$1" in *Username*) printf "%s" gitlab-ci-token ;; *) printf "%s" "$CI_JOB_TOKEN" ;; esac' > /tmp/git-askpass
     - chmod 700 /tmp/git-askpass
     - export GIT_ASKPASS=/tmp/git-askpass GIT_TERMINAL_PROMPT=0
-    - git push origin "HEAD:$CI_COMMIT_BRANCH"
+    - git push origin "HEAD:$CI_DEFAULT_BRANCH"

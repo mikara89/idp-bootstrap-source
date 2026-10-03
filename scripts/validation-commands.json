@@ -95,6 +95,24 @@
         "-File",
         "scripts/tests/infrastructure-provider-contract.tests.ps1"
       ]
+    ],
+    "openbao": [
+      [
+        "python",
+        "scripts/tests/openbao-ansible.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-stack.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-provisioner.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-backup-restore.runtime.tests.py"
+      ]
     ]
   },
   "exported_runtime_tree": {

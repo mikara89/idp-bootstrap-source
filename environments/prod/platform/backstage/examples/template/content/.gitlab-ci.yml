@@ -69,4 +69,11 @@ gitops:
     - test -n "$GITOPS_TRIGGER_TOKEN"
     - test -n "$GITOPS_TARGET_REF"
     - test -s image.digest
-    - curl --fail --request POST --form token="$GITOPS_TRIGGER_TOKEN" --form ref="$GITOPS_TARGET_REF" --form "variables[GOLDEN_PATH_SERVICE]=$CI_PROJECT_NAME" --form "variables[GOLDEN_PATH_PROJECT]=$CI_PROJECT_PATH" --form "variables[GOLDEN_PATH_IMAGE]=$CI_REGISTRY_IMAGE@$(cat image.digest)" --form "variables[GOLDEN_PATH_PORT]=${{ values.port }}" --form "variables[GOLDEN_PATH_EXPOSURE]=${{ values.exposure }}" --form "variables[GOLDEN_PATH_OWNER]=${{ values.owner }}" --form "variables[GOLDEN_PATH_PROFILE]=${{ values.resourceProfile }}" --form-string "variables[GOLDEN_PATH_ENV_JSON]=$GOLDEN_PATH_ENV_JSON" --form-string "variables[GOLDEN_PATH_SECRET_REFS_JSON]=$GOLDEN_PATH_SECRET_REFS_JSON" --form "variables[GOLDEN_PATH_SOURCE_SHA]=$CI_COMMIT_SHA" "$GITOPS_TRIGGER_URL"
+    - |
+      env_bytes="$(printf '%s' "$GOLDEN_PATH_ENV_JSON" | wc -c | tr -d '[:space:]')"
+      secret_refs_bytes="$(printf '%s' "$GOLDEN_PATH_SECRET_REFS_JSON" | wc -c | tr -d '[:space:]')"
+      if [ "$env_bytes" -ge 1024 ] || [ "$secret_refs_bytes" -ge 1024 ]; then
+        echo 'Golden Path JSON inputs must each be smaller than 1 KiB.' >&2
+        exit 1
+      fi
+    - curl --fail --request POST --form token="$GITOPS_TRIGGER_TOKEN" --form ref="$GITOPS_TARGET_REF" --form-string "inputs[mode]=golden-path" --form-string "inputs[golden_path_service]=$CI_PROJECT_NAME" --form-string "inputs[golden_path_project]=$CI_PROJECT_PATH" --form-string "inputs[golden_path_image]=$CI_REGISTRY_IMAGE@$(cat image.digest)" --form-string "inputs[golden_path_port]=${{ values.port }}" --form-string "inputs[golden_path_exposure]=${{ values.exposure }}" --form-string "inputs[golden_path_owner]=${{ values.owner }}" --form-string "inputs[golden_path_profile]=${{ values.resourceProfile }}" --form-string "inputs[golden_path_env_json]=$GOLDEN_PATH_ENV_JSON" --form-string "inputs[golden_path_secret_refs_json]=$GOLDEN_PATH_SECRET_REFS_JSON" --form-string "inputs[golden_path_source_revision]=$CI_COMMIT_SHA" "$GITOPS_TRIGGER_URL"

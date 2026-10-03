@@ -21,16 +21,24 @@ pipeline URL, and failure time when asking a platform maintainer for help.
 ## Runtime settings and secrets
 
 The service contract supports `small` and `medium` resource profiles and
-non-secret environment settings. Ask a platform maintainer to review changes
-to the accepted definition at `environments/prod/apps/definitions/${{ values.name }}.yaml`
-in the platform runtime repository. Subsequent image promotions preserve those
+up to eight non-secret environment settings. Names must be uppercase, at most
+48 characters, and must not use reserved or secret-like names. Values are at
+most 64 printable ASCII characters; avoid quotes, dollar signs, backticks, and
+backslashes. These bounds keep serialized settings below GitLab's 1 KiB typed
+input limit. Ask a platform maintainer to review changes to the accepted
+definition at `environments/prod/apps/definitions/${{ values.name }}.yaml` in
+the platform runtime repository. Subsequent image promotions preserve those
 approved settings.
 
 Never commit secret values or put them in scaffolder inputs or promotion
-variables. Operators provision approved service-specific secret references
-through Ansible and mount them under `/run/secrets/<reference>`. Rotate by
-provisioning a new versioned reference, updating the approved definition, and
-retiring the old secret only after no tasks use it.
+variables. The template accepts up to eight references, each at most 64
+characters. Approved references use `database-url`, `api-key`, or
+`oauth-client-secret`, optionally followed by a positive version such as
+`database-url-v2` or `api-key-v3`. Operators provision these references through
+Ansible and mount them under `/run/secrets/<reference>`. Rotate by provisioning
+a new versioned reference, updating the approved definition, and retiring the
+old secret only after no tasks use it. Together, the reference count and length
+limits keep both serialized JSON values below GitLab's 1 KiB typed-input limit.
 
 `internal` services have no developer-facing route or platform readiness gate.
 `authenticated-web` services use Traefik readiness checks and the platform login.
