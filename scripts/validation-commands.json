@@ -111,6 +111,14 @@
       ],
       [
         "python",
+        "scripts/tests/openbao-bootstrap-workflow.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-bootstrap-controller.tests.py"
+      ],
+      [
+        "python",
         "scripts/tests/openbao-backup-restore.runtime.tests.py"
       ]
     ]
