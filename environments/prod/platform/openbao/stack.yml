@@ -1,0 +1,92 @@
+version: "3.8"
+
+# ============================================================================
+# OpenBao application secret store
+#
+# Single-node Raft on the verified platform database volume mount. The service
+# stays private on platform_net and requires manual unseal after initialization
+# or restart.
+# ============================================================================
+
+networks:
+  platform_net:
+    external: true
+
+volumes:
+  openbao_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PLATFORM_DB_DATA_PATH}/openbao
+
+configs:
+  openbao_server_config:
+    external: true
+    name: ${OPENBAO_SERVER_CONFIG_NAME}
+  openbao_tls_ca:
+    external: true
+    name: ${OPENBAO_TLS_CA_CONFIG_NAME}
+
+secrets:
+  openbao_tls_cert:
+    external: true
+    name: ${OPENBAO_TLS_CERT_SECRET_NAME}
+  openbao_tls_key:
+    external: true
+    name: ${OPENBAO_TLS_KEY_SECRET_NAME}
+
+services:
+  openbao:
+    image: ${CONTAINER_REGISTRY}/${IMAGE_PREFIX}/openbao@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
+    networks:
+      - platform_net
+    command:
+      - server
+      - -config=/openbao/config/config.hcl
+    configs:
+      - source: openbao_server_config
+        target: /openbao/config/config.hcl
+        mode: 0444
+      - source: openbao_tls_ca
+        target: /openbao/tls/ca.crt
+        mode: 0444
+    secrets:
+      - source: openbao_tls_cert
+        target: /openbao/tls/tls.crt
+      - source: openbao_tls_key
+        target: /openbao/tls/tls.key
+    volumes:
+      - openbao_data:/openbao/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          BAO_ADDR=https://openbao:8200 BAO_CACERT=/openbao/tls/ca.crt bao status
+          >/dev/null 2>&1;
+          status=$$?;
+          [ "$$status" -eq 0 ] || [ "$$status" -eq 2 ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.workload == platform
+          - node.labels.persistence.platform-db == true
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 10s
