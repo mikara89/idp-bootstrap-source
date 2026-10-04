@@ -67,7 +67,10 @@ services:
       test:
         - CMD-SHELL
         - >-
-          BAO_ADDR=https://openbao:8200 BAO_CACERT=/openbao/tls/ca.crt bao status
+          bao status
+          -address=https://127.0.0.1:8200
+          -ca-cert=/openbao/tls/ca.crt
+          -tls-server-name=openbao
           >/dev/null 2>&1;
           status=$$?;
           [ "$$status" -eq 0 ] || [ "$$status" -eq 2 ]
