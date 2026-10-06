@@ -11,6 +11,14 @@
         "scripts/tests/agent-skills.tests.py"
       ],
       [
+        "python",
+        "scripts/check-technical-writing.py"
+      ],
+      [
+        "python",
+        "scripts/tests/check-technical-writing.tests.py"
+      ],
+      [
         "pwsh",
         "-NoProfile",
         "-File",
