@@ -119,7 +119,19 @@
       ],
       [
         "python",
-        "scripts/tests/openbao-bootstrap-workflow.contract.tests.py"
+        "infra/ansible/tests/openbao-backup-operator.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-backup-operator.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-bootstrap-github-boundary.contract.tests.py"
+      ],
+      [
+        "python",
+        "scripts/tests/openbao-bootstrap-operator.contract.tests.py"
       ],
       [
         "python",
