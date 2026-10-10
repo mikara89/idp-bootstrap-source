@@ -56,7 +56,7 @@ build-image:
     - sh ./scripts/buildah-build-hygiene.sh prepare
   script:
     - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --build-arg APP_PORT="${{ values.port }}" -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+    - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" bud --format docker --build-arg APP_PORT="${{ values.port }}" -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
     - buildah --storage-driver "$STORAGE_DRIVER" --storage-opt "$BUILDAH_STORAGE_OPT" push --digestfile image.digest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
   artifacts: { paths: [image.digest] }
   after_script:
