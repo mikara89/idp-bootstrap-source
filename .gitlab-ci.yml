@@ -109,8 +109,8 @@ validate-platform:
     - when: on_success
   before_script:
     - apt-get update
-    - apt-get install -y python3-pip python-is-python3
-    - python3 -m pip install --break-system-packages pyyaml jinja2
+    - apt-get install -y python-is-python3 python3-yaml python3-jinja2
+    - python3 -c "import yaml, jinja2"
   script:
     - python3 scripts/run-validation.py --mode exported-runtime
 
