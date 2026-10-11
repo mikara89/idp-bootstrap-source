@@ -1,4 +1,11 @@
 stages: [validate, test, image, gitops]
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
 default:
   tags:
     - docker
@@ -14,16 +21,46 @@ variables:
     ${{ values.runtimeEnvironmentJson }}
   GOLDEN_PATH_SECRET_REFS_JSON: >-
     ${{ values.secretReferencesJson }}
+
+# Feature branches and merge requests use the sandboxed Runner. Protected main
+# and tags stay on the existing protected Runner. Tags are a set: repeating
+# mr-validate does not add a second identity.
+.validation_routing:
+  tags:
+    - $IDP_VALIDATE_ROUTE_TAG
+    - linux
+    - idp
+    - $IDP_VALIDATE_HOST_TAG
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH)'
+      variables:
+        IDP_VALIDATE_ROUTE_TAG: mr-validate
+        IDP_VALIDATE_HOST_TAG: mr-validate
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      variables:
+        IDP_VALIDATE_ROUTE_TAG: docker
+        IDP_VALIDATE_HOST_TAG: vm03
+
 validate:
+  extends: .validation_routing
   stage: validate
   image: node:24-alpine
   script: [node --check index.js]
 test:
+  extends: .validation_routing
   stage: test
   image: node:24-alpine
   script: [npm test]
 build-image:
   stage: image
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   tags:
     - docker
     - linux
@@ -64,7 +101,10 @@ build-image:
 gitops:
   stage: gitops
   image: curlimages/curl:8.12.1
-  rules: [{ if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH' }]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
     - test -n "$GITOPS_TRIGGER_TOKEN"
     - test -n "$GITOPS_TARGET_REF"
