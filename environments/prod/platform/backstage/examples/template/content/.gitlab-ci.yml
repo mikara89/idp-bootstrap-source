@@ -22,34 +22,65 @@ variables:
   GOLDEN_PATH_SECRET_REFS_JSON: >-
     ${{ values.secretReferencesJson }}
 
-# Feature branches and merge requests use the sandboxed Runner. Protected main
-# and tags stay on the existing protected Runner. Tags are a set: repeating
-# mr-validate does not add a second identity.
-.validation_routing:
-  tags:
-    - $IDP_VALIDATE_ROUTE_TAG
-    - linux
-    - idp
-    - $IDP_VALIDATE_HOST_TAG
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH)'
-      variables:
-        IDP_VALIDATE_ROUTE_TAG: mr-validate
-        IDP_VALIDATE_HOST_TAG: mr-validate
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
-      variables:
-        IDP_VALIDATE_ROUTE_TAG: docker
-        IDP_VALIDATE_HOST_TAG: vm03
-
+# GitLab schedules jobs before rules:variables expand tag names. Use literal
+# tags on separate jobs. Do not put $IDP_VALIDATE_* in tags.
 validate:
-  extends: .validation_routing
   stage: validate
   image: node:24-alpine
+  tags:
+    - mr-validate
+    - linux
+    - idp
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
   script: [node --check index.js]
 test:
-  extends: .validation_routing
   stage: test
   image: node:24-alpine
+  tags:
+    - mr-validate
+    - linux
+    - idp
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+  script: [npm test]
+validate-protected:
+  stage: validate
+  image: node:24-alpine
+  tags:
+    - docker
+    - linux
+    - idp
+    - vm03
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+  script: [node --check index.js]
+test-protected:
+  stage: test
+  image: node:24-alpine
+  tags:
+    - docker
+    - linux
+    - idp
+    - vm03
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
   script: [npm test]
 build-image:
   stage: image
