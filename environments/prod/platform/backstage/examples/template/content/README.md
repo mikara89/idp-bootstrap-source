@@ -75,9 +75,6 @@ recovery complete.
 
 ## Offboard
 
-Ask a platform maintainer to remove the service definition, regenerate the
-aggregate stack and metrics discovery, and commit the reviewed result to the
-configured platform GitOps branch. Confirm the service has stopped and its
-route and metrics target are gone before retiring unused secrets. Remove the
-catalog registration and archive the service repository according to the team's
-data-retention decision.
+Ask a platform maintainer to retire this service.
+The maintainer follows `Retire an application` in the platform runbook `docs/runbooks/golden-path-service.md`.
+Do not delete the Swarm service from this service repository.
