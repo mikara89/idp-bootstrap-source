@@ -176,17 +176,21 @@ backstage-build:
     - linux
     - idp
   # The confined platform Runner caps the job at 2048m and mounts a 64 MiB
-  # /root tmpfs. Yarn 4 defaults enableGlobalCache to true, so its cache lands
-  # in $HOME/.yarn/berry/cache on that tmpfs and yarn install fails with ENOSPC.
-  # Keep the cache in the project workspace on the container overlay instead.
-  # Bound the V8 heap so the Backstage compile stays inside the runner limit.
+  # /root tmpfs. Yarn 4 defaults enableGlobalCache and enableMirror to true, so
+  # package downloads still land in $HOME/.yarn/berry/cache on that tmpfs even
+  # with the global cache disabled. Disable both so Yarn only uses the project
+  # workspace cache on the container overlay. Bound the V8 heap so the Backstage
+  # compile stays inside the runner limit.
   variables:
     NODE_OPTIONS: "--max-old-space-size=1536"
     YARN_ENABLE_GLOBAL_CACHE: "false"
+    YARN_ENABLE_MIRROR: "false"
   before_script:
     - corepack enable
     - df -h /root /tmp "$CI_PROJECT_DIR"
     - df -i /root /tmp "$CI_PROJECT_DIR"
+    - (cd environments/prod/platform/backstage && yarn config get enableGlobalCache)
+    - (cd environments/prod/platform/backstage && yarn config get enableMirror)
     - (cd environments/prod/platform/backstage && yarn config get cacheFolder)
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
