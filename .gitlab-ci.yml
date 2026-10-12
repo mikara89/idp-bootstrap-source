@@ -95,18 +95,25 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "trigger" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "golden-path" && "$[[ inputs.golden_path_service ]]" != ""'
     - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && $[[ inputs.bootstrap_backstage_required ]] == true'
     - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "$[[ inputs.mode ]]" == "bootstrap-image-supply" && "$[[ inputs.bootstrap_missing_platform_images ]]" != ""'
+    # Deduplicate feature-branch work: when a non-default branch has an open
+    # merge request, run only the merge-request pipeline instead of a duplicate
+    # branch-push pipeline. The default branch is never suppressed, so protected
+    # validation on the trusted Runner is always preserved.
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_OPEN_MERGE_REQUESTS && "$[[ inputs.mode ]]" == "default"'
+      when: never
     - if: '($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule") && "$[[ inputs.mode ]]" == "default"'
     - when: never
 
-validate-platform:
-  stage: validate
+# Merge-request validation routes to the opt-in project-scoped
+# idp-platform-mr-validation-runner-01 (tag `platform-mr-validate`). The
+# protected default branch and tags keep using the trusted `docker,linux,idp,vm03`
+# Runner. GitLab schedules jobs before rules:variables expand tag names, so the
+# tag split uses literal tags on separate jobs. Do not add `platform-mr-validate`
+# to the protected Runner. Deployment variables must stay protected in GitLab so
+# they are never available to merge-request pipelines.
+
+.validate-platform-job: &validate-platform-job
   image: mcr.microsoft.com/powershell:7.4-ubuntu-22.04
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "trigger"'
-      when: never
-    - if: '"$[[ inputs.mode ]]" != "default"'
-      when: never
-    - when: on_success
   before_script:
     - apt-get update
     - apt-get install -y python-is-python3 python3-yaml python3-jinja2
@@ -114,15 +121,45 @@ validate-platform:
   script:
     - python3 scripts/run-validation.py --mode exported-runtime
 
-backstage-build:
-  stage: test
-  image: node:24-bookworm-slim
+validate-platform:
+  <<: *validate-platform-job
+  stage: validate
+  tags:
+    - platform-mr-validate
+    - linux
+    - idp
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
     - if: '"$[[ inputs.mode ]]" != "default"'
       when: never
-    - when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+
+validate-platform-protected:
+  <<: *validate-platform-job
+  stage: validate
+  tags:
+    - docker
+    - linux
+    - idp
+    - vm03
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '"$[[ inputs.mode ]]" != "default"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+.backstage-build-job: &backstage-build-job
+  image: node:24-bookworm-slim
   before_script:
     - corepack enable
   script:
@@ -131,18 +168,90 @@ backstage-build:
     - yarn tsc
     - yarn build:backend
 
-runner-smoke:
+backstage-build:
+  <<: *backstage-build-job
   stage: test
-  image: alpine:3.22
+  tags:
+    - platform-mr-validate
+    - linux
+    - idp
+  # The confined platform Runner caps the job at 2048m. The V8 heap defaults to
+  # the host RAM the container reports, which would overrun the cgroup. Bound the
+  # heap so the Backstage compile stays inside the runner limit.
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=1536"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
     - if: '"$[[ inputs.mode ]]" != "default"'
       when: never
-    - when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+
+backstage-build-protected:
+  <<: *backstage-build-job
+  stage: test
+  tags:
+    - docker
+    - linux
+    - idp
+    - vm03
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '"$[[ inputs.mode ]]" != "default"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+.runner-smoke-job: &runner-smoke-job
+  image: alpine:3.22
   script:
     - echo "Runner is executing a GitLab CI job"
     - uname -a
+
+runner-smoke:
+  <<: *runner-smoke-job
+  stage: test
+  tags:
+    - platform-mr-validate
+    - linux
+    - idp
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '"$[[ inputs.mode ]]" != "default"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+
+runner-smoke-protected:
+  <<: *runner-smoke-job
+  stage: test
+  tags:
+    - docker
+    - linux
+    - idp
+    - vm03
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '"$[[ inputs.mode ]]" != "default"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
 
 # Dedicated first-boot image supply. It uses the authenticated pipeline API
 # source, while Golden Path requests use trigger-token provenance.

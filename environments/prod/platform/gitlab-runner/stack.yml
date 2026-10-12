@@ -103,3 +103,33 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 5
+
+  # Opt-in project-scoped MR validation controller for platform/idp-docker-stack.
+  # It is isolated from the protected Runner and from the services MR Runner:
+  # its own registration token, config directory, controller process, and
+  # executor profile. The job isolation and resource limits live in the
+  # separate Runner TOML rendered by Ansible, not in this Compose file.
+  gitlab-platform-mr-validation-runner:
+    image: gitlab/gitlab-runner:alpine-v19.3.1
+    networks:
+      - platform_net
+    volumes:
+      - ${GITLAB_PLATFORM_MR_VALIDATION_RUNNER_DATA_PATH:-/mnt/idp/gitlab-platform-mr-validation-runner}:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      replicas: ${GITLAB_PLATFORM_MR_VALIDATION_RUNNER_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.workload == apps
+          - node.labels.runner == true
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
