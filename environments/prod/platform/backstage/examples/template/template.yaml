@@ -14,7 +14,7 @@ spec:
         name:
           title: Name
           type: string
-          description: Unique component and repository name.
+          description: Unique component and repository name under platform/services.
           pattern: '^[a-z0-9-]+$'
         description:
           title: Description
@@ -64,16 +64,6 @@ spec:
             maxLength: 64
             pattern: '^(database-url|api-key|oauth-client-secret)(-v[1-9][0-9]*)?(?![\s\S])'
           default: []
-    - title: GitLab repository
-      required: [repoUrl]
-      properties:
-        repoUrl:
-          title: Repository location
-          type: string
-          ui:field: RepoUrlPicker
-          ui:options:
-            allowedHosts: ["gitlab.${DOMAIN}"]
-            allowedOwners: [platform/services]
   steps:
     - id: fetch-base
       name: Fetch service skeleton
@@ -96,7 +86,7 @@ spec:
       name: Publish to GitLab
       action: publish:gitlab
       input:
-        repoUrl: ${{ parameters.repoUrl }}
+        repoUrl: "gitlab.${DOMAIN}?repo=${{ parameters.name }}&owner=platform%2Fservices"
         defaultBranch: main
     - id: register
       name: Register in catalog
