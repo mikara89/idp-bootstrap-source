@@ -189,9 +189,17 @@ backstage-build:
     - corepack enable
     - df -h /root /tmp "$CI_PROJECT_DIR"
     - df -i /root /tmp "$CI_PROJECT_DIR"
+    - mkdir -p "$CI_PROJECT_DIR/.ci-tmp"
+    - export TMPDIR="$CI_PROJECT_DIR/.ci-tmp"
+    - node -p "require('node:os').tmpdir()"
+    - df -h "$TMPDIR" /tmp /root
     - (cd environments/prod/platform/backstage && yarn config get enableGlobalCache)
     - (cd environments/prod/platform/backstage && yarn config get enableMirror)
     - (cd environments/prod/platform/backstage && yarn config get cacheFolder)
+  after_script:
+    - df -h /root /tmp "$CI_PROJECT_DIR"
+    - df -i /root /tmp "$CI_PROJECT_DIR"
+    - du -sh /tmp "$CI_PROJECT_DIR/.ci-tmp" "$CI_PROJECT_DIR/environments/prod/platform/backstage/.yarn/cache" 2>/dev/null || true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "trigger"'
       when: never
