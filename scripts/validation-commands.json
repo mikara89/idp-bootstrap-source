@@ -19,6 +19,24 @@
         "scripts/tests/check-technical-writing.tests.py"
       ],
       [
+        "python",
+        "scripts/validate-diagrams.py"
+      ],
+      [
+        "python",
+        "scripts/diagram-route.py",
+        "--check"
+      ],
+      [
+        "python",
+        "scripts/export-diagrams.py",
+        "--help"
+      ],
+      [
+        "python",
+        "scripts/tests/diagrams.tests.py"
+      ],
+      [
         "pwsh",
         "-NoProfile",
         "-File",
