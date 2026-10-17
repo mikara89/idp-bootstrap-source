@@ -1,0 +1,19 @@
+version: "3.8"
+
+secrets:
+  gitlab_registry_backup_password:
+    external: true
+    name: ${GITLAB_REGISTRY_BACKUP_PASSWORD_SECRET_NAME}
+  gitlab_registry_restore_password:
+    external: true
+    name: ${GITLAB_REGISTRY_RESTORE_PASSWORD_SECRET_NAME}
+
+services:
+  gitlab:
+    secrets:
+      - source: gitlab_registry_backup_password
+        target: /run/secrets/gitlab_registry_backup_password
+        mode: 0400
+      - source: gitlab_registry_restore_password
+        target: /run/secrets/gitlab_registry_restore_password
+        mode: 0400

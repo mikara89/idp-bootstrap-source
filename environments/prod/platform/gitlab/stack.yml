@@ -58,6 +58,13 @@ services:
         gitlab_rails['omniauth_providers'] = [{ name: 'openid_connect', label: 'Keycloak', args: { name: 'openid_connect', scope: ['openid', 'profile', 'email'], response_type: 'code', issuer: 'https://keycloak.${DOMAIN}/realms/idp', discovery: true, client_auth_method: 'basic', uid_field: 'preferred_username', pkce: true, client_options: { identifier: 'gitlab', secret: File.read('/run/secrets/gitlab_oidc_client_secret').strip, redirect_uri: 'https://gitlab.${DOMAIN}/users/auth/openid_connect/callback' } } }]
         gitlab_rails['gitlab_shell_ssh_port'] = 0
         gitlab_rails['backup_keep_time'] = 172800
+        if ENV['GITLAB_REGISTRY_METADATA_DATABASE_BACKUP_ENABLED'] == 'true'
+          gitlab_rails['backup_role'] = true
+          gitlab_rails['backup_registry_user'] = 'registry_backup'
+          gitlab_rails['backup_registry_password'] = File.read('/run/secrets/gitlab_registry_backup_password').strip
+          gitlab_rails['restore_registry_user'] = 'registry_restore'
+          gitlab_rails['restore_registry_password'] = File.read('/run/secrets/gitlab_registry_restore_password').strip
+        end
         registry_external_url 'https://registry.${DOMAIN}'
         registry['enable'] = true
         registry['registry_http_addr'] = '0.0.0.0:5000'
@@ -69,6 +76,7 @@ services:
         prometheus_monitoring['enable'] = false
         puma['worker_processes'] = 2
         sidekiq['max_concurrency'] = 10
+      GITLAB_REGISTRY_METADATA_DATABASE_BACKUP_ENABLED: ${GITLAB_REGISTRY_METADATA_DATABASE_BACKUP_ENABLED}
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost/-/readiness || exit 1"]
       interval: 60s
